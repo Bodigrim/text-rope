@@ -1,0 +1,29 @@
+name: emulated
+on:
+  push:
+    branches:
+      - master
+  pull_request: {}
+
+jobs:
+  emulated:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: ['s390x']
+    steps:
+    - uses: actions/checkout@v2
+    - uses: uraimo/run-on-arch-action@v2.1.1
+      timeout-minutes: 60
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu20.04
+        githubToken: ${{ github.token }}
+        install: |
+          apt-get update -y
+          apt-get install -y ghc libghc-vector-dev libghc-fingertree-dev libghc-tasty-quickcheck-dev
+        run: |
+          ghc --version
+          ghc --make -isrc:test -o Tests cbits/*.c test/Main.hs +RTS -s
+          ./Tests +RTS -s

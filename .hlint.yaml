@@ -1,0 +1,8 @@
+- ignore:
+    name: Unused LANGUAGE pragma
+- ignore:
+    name: Use fewer imports
+- ignore:
+    name: Monoid law, left identity
+- ignore:
+    name: Monoid law, right identity

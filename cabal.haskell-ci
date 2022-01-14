@@ -1,0 +1,34 @@
+constraint-set debug
+  constraints: text-rope +debug
+  tests: True
+  run-tests: True
+
+constraint-set developer
+  constraints: text +developer
+  tests: True
+  run-tests: True
+
+constraint-set developer-debug
+  constraints: text +developer, text-rope +debug
+  tests: True
+  run-tests: True
+
+constraint-set text-2
+  constraints: text >= 2
+  tests: True
+  run-tests: True
+
+constraint-set text-2-debug
+  constraints: text >= 2, text-rope +debug
+  tests: True
+  run-tests: True
+
+constraint-set text-2-developer
+  constraints: text >= 2, text +developer
+  tests: True
+  run-tests: True
+
+constraint-set text-2-developer-debug
+  constraints: text >= 2, text +developer, text-rope +debug
+  tests: True
+  run-tests: True
