@@ -56,10 +56,6 @@ instance Arbitrary Char.TextLines where
   arbitrary = Char.fromText <$> arbitrary
   shrink = L.map Char.fromText . shrink . Char.toText
 
-instance Arbitrary Utf16.TextLines where
-  arbitrary = Utf16.fromText <$> arbitrary
-  shrink = L.map Utf16.fromText . shrink . Utf16.toText
-
 instance Arbitrary Char.Position where
   arbitrary = oneof
     [ Char.Position <$> arbitrary <*> arbitrary

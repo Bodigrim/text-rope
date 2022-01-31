@@ -10,14 +10,14 @@
 {-# LANGUAGE UnliftedFFITypes #-}
 
 module Data.Text.Utf16.Lines
-  ( TextLines
-  , fromText
-  , toText
-  , null
+  ( I.TextLines
+  , I.fromText
+  , I.toText
+  , I.null
   -- * Lines
-  , lines
-  , lengthInLines
-  , splitAtLine
+  , I.lines
+  , I.lengthInLines
+  , I.splitAtLine
   -- * UTF-16 code units
   , length
   , splitAt
@@ -28,21 +28,19 @@ module Data.Text.Utf16.Lines
 
 import Prelude ((+), (-), seq)
 import Control.DeepSeq (NFData, rnf)
-import Data.Bool (Bool, otherwise)
-import Data.Coerce (coerce)
+import Data.Bool (otherwise)
 import Data.Eq (Eq, (==))
 import Data.Function ((.), ($))
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
 import Data.Ord (Ord, (<=), (>), (>=))
 import Data.Semigroup (Semigroup(..))
-import Data.String (IsString)
 import qualified Data.Text.Array as TA
 import Data.Text.Internal (Text(..))
 import qualified Data.Text.Lines.Internal as I
 import qualified Data.Vector.Unboxed as U
 import Data.Word (Word)
-import Text.Show (Show, show)
+import Text.Show (Show)
 
 #if MIN_VERSION_text(2,0,0)
 import Prelude (fromIntegral)
@@ -61,73 +59,6 @@ import GHC.Stack (HasCallStack)
 #else
 #define HasCallStack ()
 #endif
-
--- | A wrapper around 'Text' for fast line/column navigation.
--- Concatenation takes linear time.
---
--- This is a building block for 'Data.Text.Utf16.Rope.Rope',
--- which provides logarithmic concatenation.
-newtype TextLines = TextLines I.TextLines
-  deriving (Eq, Ord, IsString, Semigroup, Monoid, NFData)
-
-instance Show TextLines where
-  show (TextLines t) = show t
-
--- | Create from 'Text', linear time.
-fromText :: HasCallStack => Text -> TextLines
-fromText = coerce I.fromText
-
--- | Extract 'Text', O(1).
-toText :: TextLines -> Text
-toText = coerce I.toText
-
--- | Check whether a text is empty, O(1).
-null :: TextLines -> Bool
-null = coerce I.null
-
--- | Split into lines by @\\n@, similar to @Data.Text.@'Data.Text.lines'.
--- Each line is produced in O(1).
---
--- >>> :set -XOverloadedStrings
--- >>> lines ""
--- []
--- >>> lines "foo"
--- ["foo"]
--- >>> lines "foo\n"
--- ["foo"]
--- >>> lines "foo\n\n"
--- ["foo",""]
--- >>> lines "foo\nbar"
--- ["foo","bar"]
---
-lines :: TextLines -> [Text]
-lines = coerce I.lines
-
--- | Equivalent to 'Data.List.length' . 'lines', but in O(1).
---
--- >>> :set -XOverloadedStrings
--- >>> lengthInLines ""
--- 0
--- >>> lengthInLines "foo"
--- 1
--- >>> lengthInLines "foo\n"
--- 1
--- >>> lengthInLines "foo\n\n"
--- 2
--- >>> lengthInLines "foo\nbar"
--- 2
---
-lengthInLines :: TextLines -> Word
-lengthInLines = coerce I.lengthInLines
-
--- | Split at given line, O(1).
---
--- >>> :set -XOverloadedStrings
--- >>> map (\l -> splitAtLine l "foo\nbar") [0..3]
--- [("","foo\nbar"),("foo\n","bar"),("foo\nbar",""),("foo\nbar","")]
---
-splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
-splitAtLine = coerce I.splitAtLine
 
 lengthTextUtf16 :: Text -> Word
 #if MIN_VERSION_text(2,0,0)
@@ -149,8 +80,8 @@ lengthTextUtf16 (Text _ _ len) = I.intToWord len
 -- >>> Data.Text.Lines.length "fя𐀀"
 -- 3
 --
-length :: TextLines -> Word
-length = lengthTextUtf16 . toText
+length :: I.TextLines -> Word
+length = lengthTextUtf16 . I.toText
 
 -- | Represent a position in a text.
 data Position = Position
@@ -182,9 +113,9 @@ instance Monoid Position where
 -- Position {posLine = 2, posColumn = 0}
 --
 lengthAsPosition
-  :: TextLines
+  :: I.TextLines
   -> Position
-lengthAsPosition (TextLines (I.TextLines (Text arr off len) nls)) = Position
+lengthAsPosition (I.TextLines (Text arr off len) nls) = Position
   { posLine = I.intToWord $ U.length nls
   , posColumn = lengthTextUtf16 $ Text arr nl (off + len - nl)
   }
@@ -214,7 +145,7 @@ foreign import ccall unsafe "_hs_text_lines_take_utf8_as_utf16" takeUtf8AsUtf16
       c = TA.unsafeIndex arr (off + k')
 #endif
 
--- | Combination of 'splitAtLine' and subsequent 'splitAt'.
+-- | Combination of 'I.splitAtLine' and subsequent 'splitAt'.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
 -- Time is linear in 'posColumn', but does not depend on 'posLine'.
 --
@@ -235,14 +166,14 @@ foreign import ccall unsafe "_hs_text_lines_take_utf8_as_utf16" takeUtf8AsUtf16
 splitAtPosition
   :: HasCallStack
   => Position
-  -> TextLines
-  -> Maybe (TextLines, TextLines)
-splitAtPosition (Position line column) (TextLines (I.TextLines (Text arr off len) nls)) =
+  -> I.TextLines
+  -> Maybe (I.TextLines, I.TextLines)
+splitAtPosition (Position line column) (I.TextLines (Text arr off len) nls) =
   case splitTextAtUtf16Index column tx of
     Nothing -> Nothing
     Just (Text _ off' len', tz) -> let n = I.binarySearch nls (off' + len') in Just
-      ( TextLines $ I.textLines (Text arr off (off' + len' - off)) (U.take n nls)
-      , TextLines $ I.textLines tz (U.drop n nls))
+      ( I.textLines (Text arr off (off' + len' - off)) (U.take n nls)
+      , I.textLines tz (U.drop n nls))
   where
     arrLen = off + len
     nl
@@ -259,5 +190,5 @@ splitAtPosition (Position line column) (TextLines (I.TextLines (Text arr off len
 -- >>> map (\c -> splitAt c "fя𐀀") [0..4]
 -- [Just ("","fя𐀀"),Just ("f","я𐀀"),Just ("fя","𐀀"),Nothing,Just ("fя𐀀","")]
 --
-splitAt :: HasCallStack => Word -> TextLines -> Maybe (TextLines, TextLines)
+splitAt :: HasCallStack => Word -> I.TextLines -> Maybe (I.TextLines, I.TextLines)
 splitAt = splitAtPosition . Position 0
