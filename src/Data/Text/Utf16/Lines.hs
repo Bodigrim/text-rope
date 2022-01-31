@@ -76,17 +76,14 @@ instance Show TextLines where
 -- | Create from 'Text', linear time.
 fromText :: HasCallStack => Text -> TextLines
 fromText = coerce I.fromText
-{-# INLINE fromText #-}
 
 -- | Extract 'Text', O(1).
 toText :: TextLines -> Text
 toText = coerce I.toText
-{-# INLINE toText #-}
 
 -- | Check whether a text is empty, O(1).
 null :: TextLines -> Bool
 null = coerce I.null
-{-# INLINE null #-}
 
 -- | Split into lines by @\\n@, similar to @Data.Text.@'Data.Text.lines'.
 -- Each line is produced in O(1).
@@ -105,7 +102,6 @@ null = coerce I.null
 --
 lines :: TextLines -> [Text]
 lines = coerce I.lines
-{-# INLINE lines #-}
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in O(1).
 --
@@ -123,7 +119,6 @@ lines = coerce I.lines
 --
 lengthInLines :: TextLines -> Word
 lengthInLines = coerce I.lengthInLines
-{-# INLINE lengthInLines #-}
 
 -- | Split at given line, O(1).
 --
@@ -133,7 +128,6 @@ lengthInLines = coerce I.lengthInLines
 --
 splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine = coerce I.splitAtLine
-{-# INLINE splitAtLine #-}
 
 lengthTextUtf16 :: Text -> Word
 #if MIN_VERSION_text(2,0,0)
@@ -145,7 +139,6 @@ foreign import ccall unsafe "_hs_text_lines_length_utf8_as_utf16" lengthUtf8AsUt
 #else
 lengthTextUtf16 (Text _ _ len) = I.intToWord len
 #endif
-{-# INLINABLE lengthTextUtf16 #-}
 
 -- | Length in UTF-16 code units.
 -- Takes linear time.
@@ -158,7 +151,6 @@ lengthTextUtf16 (Text _ _ len) = I.intToWord len
 --
 length :: TextLines -> Word
 length = lengthTextUtf16 . toText
-{-# INLINE length #-}
 
 -- | Represent a position in a text.
 data Position = Position
@@ -198,7 +190,6 @@ lengthAsPosition (TextLines (I.TextLines (Text arr off len) nls)) = Position
   }
   where
     nl = if U.null nls then off else U.last nls + 1
-{-# INLINABLE lengthAsPosition #-}
 
 splitTextAtUtf16Index :: Word -> Text -> Maybe (Text, Text)
 splitTextAtUtf16Index k t@(Text arr off len)
@@ -222,7 +213,6 @@ foreign import ccall unsafe "_hs_text_lines_take_utf8_as_utf16" takeUtf8AsUtf16
       k' = I.wordToInt k
       c = TA.unsafeIndex arr (off + k')
 #endif
-{-# INLINABLE splitTextAtUtf16Index #-}
 
 -- | Combination of 'splitAtLine' and subsequent 'splitAt'.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
@@ -260,7 +250,6 @@ splitAtPosition (Position line column) (TextLines (I.TextLines (Text arr off len
       | line > I.intToWord (U.length nls) = arrLen
       | otherwise = nls U.! (I.wordToInt line - 1) + 1
     tx = Text arr nl (arrLen - nl)
-{-# INLINABLE splitAtPosition #-}
 
 -- | Split at given UTF-16 code unit.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
@@ -272,4 +261,3 @@ splitAtPosition (Position line column) (TextLines (I.TextLines (Text arr off len
 --
 splitAt :: HasCallStack => Word -> TextLines -> Maybe (TextLines, TextLines)
 splitAt = splitAtPosition . Position 0
-{-# INLINE splitAt #-}

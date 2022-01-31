@@ -90,28 +90,23 @@ instance NFData TextLines where
 
 instance Eq TextLines where
   (==) = (==) `on` toText
-  {-# INLINE (==) #-}
 
 instance Ord TextLines where
   compare = compare `on` toText
-  {-# INLINE compare #-}
 
 instance Show TextLines where
 #ifdef DEBUG
   show (TextLines x y) = "TextLines { " ++ showText x ++ ", " ++ show y ++ " }"
 #else
   show = show . toText
-  {-# INLINE show #-}
 #endif
 
 instance IsString TextLines where
   fromString = fromText . fromString
-  {-# INLINE fromString #-}
 
 -- | Create from 'Text', linear time.
 fromText :: HasCallStack => Text -> TextLines
 fromText t = textLines t (U.fromList $ nlIndices t)
-{-# INLINABLE fromText #-}
 
 nlIndices :: Text -> [Int]
 #if MIN_VERSION_text(2,0,0)
@@ -134,7 +129,6 @@ nlIndices (Text arr off len) = go off
         delta = fromIntegral (unsafeDupablePerformIO $
           memchr (TA.aBA arr) (2 * fromIntegral n) (2 * fromIntegral (len + off - n))) `shiftR` 1
 #endif
-{-# INLINABLE nlIndices #-}
 
 foreign import ccall unsafe "_hs_text_lines_memchr0A" memchr
   :: ByteArray# -> CSize -> CSize -> IO CSsize
@@ -142,7 +136,6 @@ foreign import ccall unsafe "_hs_text_lines_memchr0A" memchr
 -- | Check whether a text is empty, O(1).
 null :: TextLines -> Bool
 null = T.null . toText
-{-# INLINE null #-}
 
 instance Semigroup TextLines where
   TextLines t1@(Text _ off1 len1) s1 <> TextLines t2@(Text _ off2 _) s2
@@ -152,14 +145,11 @@ instance Semigroup TextLines where
       (t1 <> t2)
       (U.map (subtract off1) s1 <> U.map (+ (len1 - off2)) s2)
       -- This relies on specific implementation of instance Semigroup Text!
-  {-# INLINABLE (<>) #-}
   -- TODO implement sconcat via Builder
 
 instance Monoid TextLines where
   mempty = textLines mempty mempty
-  {-# INLINE mempty #-}
   mappend = (<>)
-  {-# INLINE mappend #-}
   -- TODO implement mconcat via Builder
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in O(1).
@@ -202,7 +192,6 @@ lines (TextLines (Text arr off len) nls) = go off (U.toList nls)
     arrLen = off + len
     go i [] = [Text arr i (arrLen - i) | i < arrLen]
     go i (x : xs) = Text arr i (x - i) : go (x + 1) xs
-{-# INLINABLE lines #-}
 
 -- | Split at given line, O(1).
 --
@@ -212,7 +201,6 @@ lines (TextLines (Text arr off len) nls) = go off (U.toList nls)
 --
 splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine k = splitAtPosition (Position k 0)
-{-# INLINE splitAtLine #-}
 
 -------------------------------------------------------------------------------
 -- Unicode code points
@@ -228,7 +216,6 @@ splitAtLine k = splitAtPosition (Position k 0)
 --
 length :: TextLines -> Word
 length = intToWord . T.length . toText
-{-# INLINE length #-}
 
 -- | Represent a position in a text.
 data Position = Position
@@ -268,7 +255,6 @@ lengthAsPosition (TextLines (Text arr off len) nls) = Position
   }
   where
     nl = if U.null nls then off else U.last nls + 1
-{-# INLINABLE lengthAsPosition #-}
 
 -- | Span by a predicate, similar to @Data.Text.@'Data.Text.span'.
 -- Takes linear (by length of the prefix satisfying the predicate) time.
@@ -286,7 +272,6 @@ span f tl@(TextLines tx@(Text arr off _) nls)
     n = binarySearch nls (off' + len')
     y = textLines (Text arr off (off' + len' - off)) (U.take n nls)
     z = textLines tz (U.drop n nls)
-{-# INLINABLE span #-}
 
 -- | Combination of 'splitAtLine' and subsequent 'splitAt'.
 -- Time is linear in 'posColumn', but does not depend on 'posLine'.
@@ -327,7 +312,6 @@ splitAtPosition (Position line column) (TextLines (Text arr off len) nls) = (y, 
     n = binarySearch nls (off' + len')
     y = textLines (Text arr off (off' + len' - off)) (U.take n nls)
     z = textLines tz (U.drop n nls)
-{-# INLINABLE splitAtPosition #-}
 
 -- | Split at given code point, similar to @Data.Text.@'Data.Text.splitAt'.
 -- Takes linear time.
@@ -338,7 +322,6 @@ splitAtPosition (Position line column) (TextLines (Text arr off len) nls) = (y, 
 --
 splitAt :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAt = splitAtPosition . Position 0
-{-# INLINE splitAt #-}
 
 -------------------------------------------------------------------------------
 -- Utils
@@ -361,15 +344,12 @@ binarySearch vec el
       where
         k = (i + j) `quot` 2
 {-# SPECIALIZE binarySearch :: U.Vector Int -> Int -> Int #-}
-{-# INLINABLE binarySearch #-}
 
 intToWord :: Int -> Word
 intToWord = fromIntegral
-{-# INLINE intToWord #-}
 
 wordToInt :: Word -> Int
 wordToInt = fromIntegral
-{-# INLINE wordToInt #-}
 
 -------------------------------------------------------------------------------
 -- Debug
@@ -399,6 +379,5 @@ textLines x y
 
 textLines :: HasCallStack => Text -> U.Vector Int -> TextLines
 textLines = TextLines
-{-# INLINE textLines #-}
 
 #endif
