@@ -71,7 +71,8 @@ data Rope
 
 instance NFData Rope where
   rnf Empty = ()
-  rnf (Node a b c d e) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d `seq` rnf e
+  -- No need to deepseq strict fields, for which WHNF = NF
+  rnf (Node l _ r _ _) = rnf l `seq` rnf r
 
 instance Eq Rope where
   (==) = (==) `on` toLazyText

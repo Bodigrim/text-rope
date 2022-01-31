@@ -86,7 +86,7 @@ data TextLines = TextLines
   }
 
 instance NFData TextLines where
-  rnf (TextLines a b) = rnf a `seq` rnf b
+  rnf = (`seq` ())
 
 instance Eq TextLines where
   (==) = (==) `on` toText
@@ -237,7 +237,7 @@ data Position = Position
   } deriving (Eq, Ord, Show)
 
 instance NFData Position where
-  rnf (Position a b) = rnf a `seq` rnf b
+  rnf = (`seq` ())
 
 -- | Associativity does not hold when 'posLine' overflows.
 instance Semigroup Position where

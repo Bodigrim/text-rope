@@ -167,7 +167,7 @@ data Position = Position
   } deriving (Eq, Ord, Show)
 
 instance NFData Position where
-  rnf (Position a b) = rnf a `seq` rnf b
+  rnf = (`seq` ())
 
 -- | Associativity does not hold when 'posLine' overflows.
 instance Semigroup Position where
