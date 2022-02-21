@@ -41,7 +41,7 @@ import Control.DeepSeq (NFData, rnf)
 import Data.Bool (Bool(..), otherwise)
 import Data.Char (Char)
 import Data.Eq (Eq, (==))
-import Data.Function ((.), ($), on, id)
+import Data.Function ((.), ($), on)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
 import Data.Ord (Ord, compare, (<), (<=), Ordering(..))
@@ -246,8 +246,7 @@ lengthInLines rp = case lastChar rp of
 
 -- | Glue chunks into 'TL.TextLines', linear time.
 toTextLines :: Rope -> TL.TextLines
-toTextLines = foldMapRope id
--- TODO make it fast! implement via mconcat for TextLines
+toTextLines = mconcat . foldMapRope (:[])
 
 toLazyText :: Rope -> TextLazy.Text
 toLazyText = foldMapRope (TextLazy.fromStrict . TL.toText)

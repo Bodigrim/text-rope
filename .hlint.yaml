@@ -6,3 +6,5 @@
     name: Monoid law, left identity
 - ignore:
     name: Monoid law, right identity
+- ignore:
+    name: Use fold

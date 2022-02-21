@@ -12,14 +12,15 @@ import Data.Bool (Bool(..), (&&))
 import Data.Function (($))
 import qualified Data.List as L
 import Data.Maybe (Maybe(..), isJust)
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, mconcat)
 import Data.Ord (min, (>=), (<))
-import Data.Semigroup ((<>))
+import Data.Semigroup ((<>), stimes, stimesMonoid)
 import qualified Data.Text as T
 import Data.Text.Utf16.Lines
 import Data.Tuple (snd)
+import Data.Word (Word)
 import Test.Tasty (testGroup, TestTree)
-import Test.Tasty.QuickCheck (testProperty, (===), property, (.||.), (.&&.), (==>))
+import Test.Tasty.QuickCheck (Small(..), testProperty, (===), property, (.||.), (.&&.), (==>))
 
 import Utils
 
@@ -37,6 +38,12 @@ testSuite = testGroup "Utf16 Lines"
     \x -> mempty <> x === (x :: TextLines)
   , testProperty "TextLines <> mempty" $
     \x -> x <> mempty === (x :: TextLines)
+
+  , testProperty "mconcat" $
+    \xs -> L.foldr (<>) mempty xs === mconcat (xs :: [TextLines])
+
+  , testProperty "stimes" $
+    \(Small n) xs -> stimesMonoid n xs === stimes (n :: Word) (xs :: TextLines)
 
   , testProperty "Position associativity" $
     \x y z -> posLine x < maxBound - posLine y && posLine y < maxBound - posLine z ==>

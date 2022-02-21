@@ -30,14 +30,17 @@ module Data.Text.Lines.Internal
   , intToWord
   ) where
 
-import Prelude ((+), (-), subtract, quot, fromIntegral, seq)
+import Prelude ((+), (-), (*), subtract, quot, fromIntegral, seq, error)
 import Control.DeepSeq (NFData, rnf)
 import Data.Bits (toIntegralSized)
-import Data.Bool (Bool, otherwise)
+import Data.Bool (Bool, otherwise, not)
 import Data.Char (Char)
 import Data.Eq (Eq, (==))
+import Data.Foldable (foldMap)
 import Data.Function (on, (.), ($))
 import Data.Int (Int)
+import Data.List (map, mapAccumL, filter)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
 import Data.Ord (Ord, compare, (<=), (<), (>))
@@ -46,6 +49,7 @@ import Data.String (IsString(..))
 import qualified Data.Text.Array as TA
 import Data.Text.Internal (Text(..))
 import qualified Data.Text as T
+import Data.Tuple (snd)
 import qualified Data.Vector.Unboxed as U
 import Data.Word (Word)
 import Foreign.C.Types (CSize(..))
@@ -57,13 +61,11 @@ import Text.Show (Show, show)
 
 #if MIN_VERSION_text(2,0,0)
 #else
-import Prelude ((*))
 import Data.Bits (shiftR)
 #endif
 
 #ifdef DEBUG
-import Prelude (error)
-import Data.Bool ((&&), not)
+import Data.Bool ((&&))
 import Data.Char (generalCategory, GeneralCategory(..))
 import Data.Eq ((/=))
 import Data.List ((++))
@@ -137,6 +139,17 @@ foreign import ccall unsafe "_hs_text_lines_memchr0A" memchr
 null :: TextLines -> Bool
 null = T.null . toText
 
+concat :: [TextLines] -> TextLines
+concat ts = case ts' of
+  [] -> mempty
+  [x] -> x
+  _ -> textLines
+    (T.concat (map toText ts'))
+    (U.concat (snd (mapAccumL f 0 ts')))
+  where
+    ts' = filter (not . null) ts
+    f l (TextLines (Text _ off len) nls) = (l + len, U.map (+ (l - off)) nls)
+
 instance Semigroup TextLines where
   TextLines t1@(Text _ off1 len1) s1 <> TextLines t2@(Text _ off2 _) s2
     | T.null t1 = textLines t2 s2
@@ -145,12 +158,22 @@ instance Semigroup TextLines where
       (t1 <> t2)
       (U.map (subtract off1) s1 <> U.map (+ (len1 - off2)) s2)
       -- This relies on specific implementation of instance Semigroup Text!
-  -- TODO implement sconcat via Builder
+
+  sconcat (x :| xs) = concat (x : xs)
+
+  stimes 1 tl = tl
+  stimes n (TextLines t@(Text _ off len) nls)
+    | n == fromIntegral n' = textLines t' nls'
+    | otherwise = error "Data.Text.Lines: stimes argument is too large"
+    where
+      n' = fromIntegral n
+      t' = T.replicate n' t
+      nls' = foldMap (\i -> U.map (\j -> j - off + len * i) nls) [0..n'-1]
 
 instance Monoid TextLines where
   mempty = textLines mempty mempty
   mappend = (<>)
-  -- TODO implement mconcat via Builder
+  mconcat = concat
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in O(1).
 --
