@@ -285,6 +285,9 @@ lastChar = \case
 -- >>> lengthInLines "foo\nbar"
 -- 2
 --
+-- If you do not care about ignoring the last newline character,
+-- you can use 'Char.posLine' . 'charLengthAsPosition' instead, which works in O(1).
+--
 lengthInLines :: Rope -> Word
 lengthInLines rp = case lastChar rp of
   Nothing -> 0
