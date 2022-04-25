@@ -9,6 +9,7 @@ module Main
 
 import qualified CharLines
 import qualified CharRope
+import qualified MixedRope
 import qualified Utf16Lines
 import qualified Utf16Rope
 
@@ -23,4 +24,5 @@ main = defaultMain $ testGroup "All"
   , CharRope.testSuite
   , Utf16Lines.testSuite
   , Utf16Rope.testSuite
+  , MixedRope.testSuite
   ]

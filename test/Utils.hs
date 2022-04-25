@@ -21,6 +21,7 @@ import qualified Data.Text.Lines as Char
 import qualified Data.Text.Rope as CharRope
 import qualified Data.Text.Utf16.Lines as Utf16
 import qualified Data.Text.Utf16.Rope as Utf16Rope
+import qualified Data.Text.Utf16.Rope.Mixed as MixedRope
 import Data.Word (Word)
 import Test.Tasty.QuickCheck (Gen, Arbitrary (arbitrary), arbitrary, shrink, frequency, arbitraryASCIIChar, arbitraryUnicodeChar, listOf, oneof)
 import Data.Monoid (mconcat, mappend)
@@ -95,3 +96,13 @@ instance Arbitrary Utf16Rope.Rope where
     | Utf16Rope.null rp = []
     | otherwise = L.concatMap (\i -> maybe [] (\(x, y) -> [x, y]) (Utf16Rope.splitAt i rp))
                   [1..Utf16Rope.length rp - 1]
+
+instance Arbitrary MixedRope.Rope where
+  arbitrary = frequency
+    [ (9, mconcat . L.map MixedRope.fromText <$> arbitrary)
+    , (1, mappend <$> arbitrary <*> arbitrary)
+    ]
+  shrink rp
+    | MixedRope.null rp = []
+    | otherwise = L.concatMap (\i -> (\(x, y) -> [x, y]) (MixedRope.charSplitAt i rp))
+                  [1..MixedRope.charLength rp - 1]

@@ -65,9 +65,18 @@ import Text.Show (show)
 #endif
 
 -- | Rope of 'Text' chunks with logarithmic concatenation.
+-- This rope offers an interface, based on code points.
+-- Use "Data.Text.Utf16.Rope", if you need UTF-16 code units,
+-- or "Data.Text.Utf16.Rope.Mixed", if you need both interfaces.
 data Rope
   = Empty
-  | Node !Rope !TL.TextLines !Rope !Word !Position
+  | Node
+    { _ropeLeft         :: !Rope
+    , _ropeMiddle       :: !TL.TextLines
+    , _ropeRight        :: !Rope
+    , _ropeCharLen      :: !Word
+    , _ropeCharLenAsPos :: !Position
+    }
 
 instance NFData Rope where
   rnf Empty = ()
