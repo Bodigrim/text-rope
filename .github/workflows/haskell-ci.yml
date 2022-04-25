@@ -8,9 +8,9 @@
 #
 # For more information, see https://github.com/haskell-CI/haskell-ci
 #
-# version: 0.14
+# version: 0.14.3
 #
-# REGENDATA ("0.14",["github","text-rope.cabal"])
+# REGENDATA ("0.14.3",["github","text-rope.cabal"])
 #
 name: Haskell-CI
 on:
@@ -28,9 +28,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - compiler: ghc-9.2.1
+          - compiler: ghc-9.2.2
             compilerKind: ghc
-            compilerVersion: 9.2.1
+            compilerVersion: 9.2.2
             setup-method: ghcup
             allow-failure: false
           - compiler: ghc-9.0.2
@@ -76,7 +76,7 @@ jobs:
           apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5
           if [ "${{ matrix.setup-method }}" = ghcup ]; then
             mkdir -p "$HOME/.ghcup/bin"
-            curl -sL https://downloads.haskell.org/ghcup/0.1.17.3/x86_64-linux-ghcup-0.1.17.3 > "$HOME/.ghcup/bin/ghcup"
+            curl -sL https://downloads.haskell.org/ghcup/0.1.17.5/x86_64-linux-ghcup-0.1.17.5 > "$HOME/.ghcup/bin/ghcup"
             chmod a+x "$HOME/.ghcup/bin/ghcup"
             "$HOME/.ghcup/bin/ghcup" install ghc "$HCVER"
             "$HOME/.ghcup/bin/ghcup" install cabal 3.6.2.0
@@ -85,7 +85,7 @@ jobs:
             apt-get update
             apt-get install -y "$HCNAME"
             mkdir -p "$HOME/.ghcup/bin"
-            curl -sL https://downloads.haskell.org/ghcup/0.1.17.3/x86_64-linux-ghcup-0.1.17.3 > "$HOME/.ghcup/bin/ghcup"
+            curl -sL https://downloads.haskell.org/ghcup/0.1.17.5/x86_64-linux-ghcup-0.1.17.5 > "$HOME/.ghcup/bin/ghcup"
             chmod a+x "$HOME/.ghcup/bin/ghcup"
             "$HOME/.ghcup/bin/ghcup" install cabal 3.6.2.0
           fi
@@ -188,12 +188,12 @@ jobs:
           find sdist -maxdepth 1 -type f -name '*.tar.gz' -exec tar -C $GITHUB_WORKSPACE/unpacked -xzvf {} \;
       - name: generate cabal.project
         run: |
-          PKGDIR_text_lines="$(find "$GITHUB_WORKSPACE/unpacked" -maxdepth 1 -type d -regex '.*/text-rope-[0-9.]*')"
-          echo "PKGDIR_text_lines=${PKGDIR_text_lines}" >> "$GITHUB_ENV"
+          PKGDIR_text_rope="$(find "$GITHUB_WORKSPACE/unpacked" -maxdepth 1 -type d -regex '.*/text-rope-[0-9.]*')"
+          echo "PKGDIR_text_rope=${PKGDIR_text_rope}" >> "$GITHUB_ENV"
           rm -f cabal.project cabal.project.local
           touch cabal.project
           touch cabal.project.local
-          echo "packages: ${PKGDIR_text_lines}" >> cabal.project
+          echo "packages: ${PKGDIR_text_rope}" >> cabal.project
           if [ $((HCNUMVER >= 80200)) -ne 0 ] ; then echo "package text-rope" >> cabal.project ; fi
           if [ $((HCNUMVER >= 80200)) -ne 0 ] ; then echo "    ghc-options: -Werror=missing-methods" >> cabal.project ; fi
           cat >> cabal.project <<EOF
@@ -226,7 +226,7 @@ jobs:
           $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct
       - name: cabal check
         run: |
-          cd ${PKGDIR_text_lines} || false
+          cd ${PKGDIR_text_rope} || false
           ${CABAL} -vnormal check
       - name: haddock
         run: |
