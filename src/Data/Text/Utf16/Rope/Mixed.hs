@@ -48,7 +48,7 @@ import Data.Eq (Eq, (==))
 import Data.Function ((.), ($), on)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
-import Data.Ord (Ord, compare, (<), (<=), Ordering(..))
+import Data.Ord (Ord, compare, (<), (<=))
 import Data.Semigroup (Semigroup(..))
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -398,38 +398,6 @@ splitAtLine !len = \case
       ll = Char.posLine (charLengthAsPosition l)
       llc = ll + Char.posLine (Char.lengthAsPosition c)
 
-charSubOnRope :: Rope -> Char.Position -> Char.Position -> Char.Position
-charSubOnRope rp (Char.Position xl xc) (Char.Position yl yc) = case xl `compare` yl of
-  GT -> Char.Position (xl - yl) xc
-  EQ -> Char.Position 0 (xc - yc)
-  LT -> Char.Position 0 (xc - charLength rp')
-  where
-    (_, rp') = splitAtLine xl rp
-
-utf16SubOnRope :: Rope -> Utf16.Position -> Utf16.Position -> Utf16.Position
-utf16SubOnRope rp (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `compare` yl of
-  GT -> Utf16.Position (xl - yl) xc
-  EQ -> Utf16.Position 0 (xc - yc)
-  LT -> Utf16.Position 0 (xc - utf16Length rp')
-  where
-    (_, rp') = splitAtLine xl rp
-
-charSubOnLines :: Char.TextLines -> Char.Position -> Char.Position -> Char.Position
-charSubOnLines tl (Char.Position xl xc) (Char.Position yl yc) = case xl `compare` yl of
-  GT -> Char.Position (xl - yl) xc
-  EQ -> Char.Position 0 (xc - yc)
-  LT -> Char.Position 0 (xc - Char.length tl')
-  where
-    (_, tl') = Char.splitAtLine xl tl
-
-utf16SubOnLines :: Utf16.TextLines -> Utf16.Position -> Utf16.Position -> Utf16.Position
-utf16SubOnLines tl (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `compare` yl of
-  GT -> Utf16.Position (xl - yl) xc
-  EQ -> Utf16.Position 0 (xc - yc)
-  LT -> Utf16.Position 0 (xc - Utf16.length tl')
-  where
-    (_, tl') = Utf16.splitAtLine xl tl
-
 -- | Combination of 'splitAtLine' and subsequent 'charSplitAt'.
 -- Time is linear in 'Char.posColumn' and logarithmic in 'Char.posLine'.
 --
@@ -448,28 +416,10 @@ utf16SubOnLines tl (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `comp
 -- ("f\n𐀀я","")
 --
 charSplitAtPosition :: HasCallStack => Char.Position -> Rope -> (Rope, Rope)
-charSplitAtPosition (Char.Position 0 0) = (mempty,)
-charSplitAtPosition !len = \case
-  Empty -> (Empty, Empty)
-  Node l c r _
-    | len <= ll -> case charSplitAtPosition len l of
-      (before, after)
-        | null after -> case charSplitAtPosition len' (c <| r) of
-          (r', r'') -> (l <> r', r'')
-        | otherwise -> (before, node after c r)
-    | len <= llc -> case Char.splitAtPosition len' c of
-      (before, after)
-        | TL.null after -> case charSplitAtPosition len'' r of
-          (r', r'') -> ((l |> c) <> r', r'')
-        | otherwise -> (l |> before, after <| r)
-    | otherwise -> case charSplitAtPosition len'' r of
-      (before, after) -> (node l c before, after)
-    where
-      ll = charLengthAsPosition l
-      lc = Char.lengthAsPosition c
-      llc = ll <> lc
-      len' = charSubOnRope l len ll
-      len'' = charSubOnLines c len' lc
+charSplitAtPosition (Char.Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
+  where
+    (beforeLine, afterLine) = splitAtLine l rp
+    (beforeColumn, afterColumn) = charSplitAt c afterLine
 
 -- | Combination of 'splitAtLine' and subsequent 'utf16SplitAt'.
 -- Time is linear in 'Utf16.posColumn' and logarithmic in 'Utf16.posLine'.
@@ -489,30 +439,7 @@ charSplitAtPosition !len = \case
 -- Just ("f\n𐀀","я")
 --
 utf16SplitAtPosition :: HasCallStack => Utf16.Position -> Rope -> Maybe (Rope, Rope)
-utf16SplitAtPosition (Utf16.Position 0 0) = Just . (mempty,)
-utf16SplitAtPosition !len = \case
-  Empty -> Just (Empty, Empty)
-  Node l c r _
-    | len <= ll -> case utf16SplitAtPosition len l of
-      Nothing -> Nothing
-      Just (before, after)
-        | null after -> case utf16SplitAtPosition len' (c <| r) of
-          Nothing -> Nothing
-          Just (r', r'') -> Just (l <> r', r'')
-        | otherwise -> Just (before, node after c r)
-    | len <= llc -> case Utf16.splitAtPosition len' c of
-      Nothing -> Nothing
-      Just (before, after)
-        | Utf16.null after -> case utf16SplitAtPosition len'' r of
-          Nothing -> Nothing
-          Just (r', r'') -> Just ((l |> c) <> r', r'')
-        | otherwise -> Just (l |> before, after <| r)
-    | otherwise -> case utf16SplitAtPosition len'' r of
-      Nothing -> Nothing
-      Just (before, after) -> Just (node l c before, after)
-    where
-      ll = utf16LengthAsPosition l
-      lc = Utf16.lengthAsPosition c
-      llc = ll <> lc
-      len' = utf16SubOnRope l len ll
-      len'' = utf16SubOnLines c len' lc
+utf16SplitAtPosition (Utf16.Position l c) rp = do
+  let (beforeLine, afterLine) = splitAtLine l rp
+  (beforeColumn, afterColumn) <- utf16SplitAt c afterLine
+  Just (beforeLine <> beforeColumn, afterColumn)

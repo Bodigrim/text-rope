@@ -44,7 +44,7 @@ import Data.Eq (Eq, (==))
 import Data.Function ((.), ($), on)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
-import Data.Ord (Ord, compare, (<), (<=), Ordering(..))
+import Data.Ord (Ord, compare, (<), (<=))
 import Data.Semigroup (Semigroup(..))
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -345,22 +345,6 @@ splitAtLine !len = \case
       ll = TL.posLine (lengthAsPosition l)
       llc = ll + TL.posLine (TL.lengthAsPosition c)
 
-subOnRope :: Rope -> Position -> Position -> Position
-subOnRope rp (Position xl xc) (Position yl yc) = case xl `compare` yl of
-  GT -> Position (xl - yl) xc
-  EQ -> Position 0 (xc - yc)
-  LT -> Position 0 (xc - length rp')
-  where
-    (_, rp') = splitAtLine xl rp
-
-subOnLines :: TL.TextLines -> Position -> Position -> Position
-subOnLines tl (Position xl xc) (Position yl yc) = case xl `compare` yl of
-  GT -> Position (xl - yl) xc
-  EQ -> Position 0 (xc - yc)
-  LT -> Position 0 (xc - TL.length tl')
-  where
-    (_, tl') = TL.splitAtLine xl tl
-
 -- | Combination of 'splitAtLine' and subsequent 'splitAt'.
 -- Time is linear in 'posColumn' and logarithmic in 'posLine'.
 --
@@ -379,30 +363,7 @@ subOnLines tl (Position xl xc) (Position yl yc) = case xl `compare` yl of
 -- Just ("f\n𐀀","я")
 --
 splitAtPosition :: HasCallStack => Position -> Rope -> Maybe (Rope, Rope)
-splitAtPosition (Position 0 0) = Just . (mempty,)
-splitAtPosition !len = \case
-  Empty -> Just (Empty, Empty)
-  Node l c r _
-    | len <= ll -> case splitAtPosition len l of
-      Nothing -> Nothing
-      Just (before, after)
-        | null after -> case splitAtPosition len' (c <| r) of
-          Nothing -> Nothing
-          Just (r', r'') -> Just (l <> r', r'')
-        | otherwise -> Just (before, node after c r)
-    | len <= llc -> case TL.splitAtPosition len' c of
-      Nothing -> Nothing
-      Just (before, after)
-        | TL.null after -> case splitAtPosition len'' r of
-          Nothing -> Nothing
-          Just (r', r'') -> Just ((l |> c) <> r', r'')
-        | otherwise -> Just (l |> before, after <| r)
-    | otherwise -> case splitAtPosition len'' r of
-      Nothing -> Nothing
-      Just (before, after) -> Just (node l c before, after)
-    where
-      ll = lengthAsPosition l
-      lc = TL.lengthAsPosition c
-      llc = ll <> lc
-      len' = subOnRope l len ll
-      len'' = subOnLines c len' lc
+splitAtPosition (Position l c) rp = do
+  let (beforeLine, afterLine) = splitAtLine l rp
+  (beforeColumn, afterColumn) <- splitAt c afterLine
+  Just (beforeLine <> beforeColumn, afterColumn)
