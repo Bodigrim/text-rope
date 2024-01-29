@@ -108,6 +108,10 @@ instance Semigroup Metrics where
 instance Monoid Metrics where
   mempty = Metrics 0 0 0
 
+subMetrics :: Metrics -> Metrics -> Metrics
+subMetrics (Metrics nls1 c1 u1) (Metrics nls2 c2 u2) =
+  Metrics (nls1 - nls2) (c1 - c2) (u1 - u2)
+
 metrics :: Rope -> Metrics
 metrics = \case
   Empty -> mempty
@@ -238,18 +242,18 @@ fromTextLines tl
   | TL.null tl = Empty
   | otherwise = Node Empty tl Empty (linesMetrics tl)
 
-node :: HasCallStack => Rope -> TextLines -> Rope -> Rope
-node l c r = defragment l c r (metrics l <> linesMetrics c <> metrics r)
+node :: HasCallStack => Rope -> TextLines -> Metrics -> Rope -> Rope
+node l c cm r = defragment l c r (metrics l <> cm <> metrics r)
 
-(|>) :: Rope -> TextLines -> Rope
-tr |> tl
+snoc :: Rope -> TextLines -> Metrics -> Rope
+snoc tr tl tlm
   | TL.null tl = tr
-  | otherwise = node tr tl Empty
+  | otherwise = node tr tl tlm Empty
 
-(<|) :: TextLines -> Rope -> Rope
-tl <| tr
+cons :: TextLines -> Metrics -> Rope -> Rope
+cons tl tlm tr
   | TL.null tl = tr
-  | otherwise = node Empty tl tr
+  | otherwise = node Empty tl tlm tr
 
 -- | Create from 'Text', linear time.
 fromText :: Text -> Rope
@@ -347,16 +351,26 @@ toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText 
 charSplitAt :: HasCallStack => Word -> Rope -> (Rope, Rope)
 charSplitAt !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _
+  Node l c r m
     | len <= ll -> case charSplitAt len l of
-        (before, after) -> (before, node after c r)
-    | len <= llc -> case Char.splitAt (len - ll) c of
-      (before, after) -> (l |> before, after <| r)
+        (before, after) -> (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case Char.splitAt i c of
+        (before, after) -> do
+          let beforeMetrics = Metrics
+                { _metricsNewlines = TL.newlines before
+                , _metricsCharLen = i
+                , _metricsUtf16Len = Utf16.length before
+                }
+          let afterMetrics = subMetrics cm beforeMetrics
+          (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case charSplitAt (len - llc) r of
-      (before, after) -> (node l c before, after)
+      (before, after) -> (node l c cm before, after)
     where
       ll = charLength l
-      llc = ll + Char.length c
+      llc = ll + _metricsCharLen cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Split at given UTF-16 code unit.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
@@ -369,19 +383,29 @@ charSplitAt !len = \case
 utf16SplitAt :: HasCallStack => Word -> Rope -> Maybe (Rope, Rope)
 utf16SplitAt !len = \case
   Empty -> Just (Empty, Empty)
-  Node l c r _
+  Node l c r m
     | len <= ll -> case utf16SplitAt len l of
         Nothing -> Nothing
-        Just (before, after) -> Just (before, node after c r)
-    | len <= llc -> case Utf16.splitAt (len - ll) c of
-      Nothing -> Nothing
-      Just (before, after) -> Just (l |> before, after <| r)
+        Just (before, after) -> Just (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case Utf16.splitAt (len - ll) c of
+        Nothing -> Nothing
+        Just (before, after) -> do
+          let beforeMetrics = Metrics
+                { _metricsNewlines = TL.newlines before
+                , _metricsCharLen = Char.length before
+                , _metricsUtf16Len = i
+                }
+          let afterMetrics = subMetrics cm beforeMetrics
+          Just (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case utf16SplitAt (len - llc) r of
       Nothing -> Nothing
-      Just (before, after) -> Just (node l c before, after)
+      Just (before, after) -> Just (node l c cm before, after)
     where
       ll = utf16Length l
-      llc = ll + Utf16.length c
+      llc = ll + _metricsUtf16Len cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Split at given line, logarithmic time.
 --
@@ -392,17 +416,23 @@ utf16SplitAt !len = \case
 splitAtLine :: HasCallStack => Word -> Rope -> (Rope, Rope)
 splitAtLine !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _
+  Node l c r m
     | len <= ll -> case splitAtLine len l of
-      (before, after) -> (before, node after c r)
-    | len <= llc -> case TL.splitAtLine (len - ll) c of
-      (before, after) -> (l |> before, after <| r)
+      (before, after) -> (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case TL.splitAtLine i c of
+        (before, after) -> do
+          let beforeMetrics = linesMetrics before
+          let afterMetrics = subMetrics cm beforeMetrics
+          (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case splitAtLine (len - llc) r of
-      (before, after) -> (node l c before, after)
+      (before, after) -> (node l c cm before, after)
     where
       -- posLine is the same both in Char.lengthAsPosition and Utf16.lengthAsPosition
-      ll = Char.posLine (charLengthAsPosition l)
-      llc = ll + Char.posLine (Char.lengthAsPosition c)
+      ll = newlines l
+      llc = ll + _metricsNewlines cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Combination of 'splitAtLine' and subsequent 'charSplitAt'.
 -- Time is linear in 'Char.posColumn' and logarithmic in 'Char.posLine'.
