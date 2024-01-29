@@ -85,11 +85,9 @@ data Rope
     }
 
 data Metrics = Metrics
-  { _metricsNewlines      :: !Word
-  , _metricsCharLen       :: !Word
-  , _metricsCharLenAsPos  :: !Char.Position
-  , _metricsUtf16Len      :: !Word
-  , _metricsUtf16LenAsPos :: !Utf16.Position
+  { _metricsNewlines :: !Word
+  , _metricsCharLen  :: !Word
+  , _metricsUtf16Len :: !Word
   }
 
 instance NFData Rope where
@@ -104,11 +102,11 @@ instance Ord Rope where
   compare = compare `on` toLazyText
 
 instance Semigroup Metrics where
-  Metrics nls1 c1 p1 u1 up1 <> Metrics nls2 c2 p2 u2 up2 =
-    Metrics (nls1 + nls2) (c1 + c2) (p1 <> p2) (u1 + u2) (up1 <> up2)
+  Metrics nls1 c1 u1 <> Metrics nls2 c2 u2 =
+    Metrics (nls1 + nls2) (c1 + c2) (u1 + u2)
 
 instance Monoid Metrics where
-  mempty = Metrics 0 0 mempty 0 mempty
+  mempty = Metrics 0 0 0
 
 metrics :: Rope -> Metrics
 metrics = \case
@@ -119,9 +117,7 @@ linesMetrics :: Char.TextLines -> Metrics
 linesMetrics tl = Metrics
   { _metricsNewlines = TL.newlines tl
   , _metricsCharLen = Char.length tl
-  , _metricsCharLenAsPos = Char.lengthAsPosition tl
   , _metricsUtf16Len = Utf16.length tl
-  , _metricsUtf16LenAsPos = Utf16.lengthAsPosition tl
   }
 
 #ifdef DEBUG
@@ -175,7 +171,8 @@ utf16Length = _metricsUtf16Len . metrics
 newlines :: Rope -> Word
 newlines = _metricsNewlines . metrics
 
--- | Measure text length as an amount of lines and columns, O(1).
+-- | Measure text length as an amount of lines and columns.
+-- Time is linear in the length of the last line.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> charLengthAsPosition "f𐀀"
@@ -186,9 +183,14 @@ newlines = _metricsNewlines . metrics
 -- Position {posLine = 2, posColumn = 0}
 --
 charLengthAsPosition :: Rope -> Char.Position
-charLengthAsPosition = _metricsCharLenAsPos . metrics
+charLengthAsPosition rp =
+  Char.Position nls (charLength line)
+  where
+    nls = newlines rp
+    (_, line) = splitAtLine nls rp
 
--- | Measure text length as an amount of lines and columns, O(1).
+-- | Measure text length as an amount of lines and columns.
+-- Time is linear in the length of the last line.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> utf16LengthAsPosition "f𐀀"
@@ -199,7 +201,11 @@ charLengthAsPosition = _metricsCharLenAsPos . metrics
 -- Position {posLine = 2, posColumn = 0}
 --
 utf16LengthAsPosition :: Rope -> Utf16.Position
-utf16LengthAsPosition = _metricsUtf16LenAsPos . metrics
+utf16LengthAsPosition rp =
+  Utf16.Position nls (utf16Length line)
+  where
+    nls = newlines rp
+    (_, line) = splitAtLine nls rp
 
 instance Semigroup Rope where
   Empty <> t = t
