@@ -4,6 +4,7 @@
 -- Maintainer:  Andrew Lelechenko <andrew.lelechenko@gmail.com>
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -30,6 +31,7 @@ import Test.Tasty.Bench (defaultMain, bgroup, bench, nf, bcompare)
 
 import qualified Data.Text.Rope as CharRope
 import qualified Data.Text.Utf16.Rope as Utf16Rope
+import qualified Data.Text.Utf16.Rope.Mixed as Mixed
 #ifdef MIN_VERSION_core_text
 import qualified Core.Text.Rope as CoreText
 #endif
@@ -40,41 +42,48 @@ import qualified Data.Rope.UTF16 as RopeSplay
 import qualified Yi.Rope as YiRope
 #endif
 
+data CodePoint
+data Utf16
+
 main :: IO ()
 main = defaultMain
   [ bgroup "Split at position"
     [ bgroup "Unicode"
-      [ bench "text-rope" $ nf (editByPosition (Proxy @CharRope.Rope)) txt
+      [ bench "text-rope" $ nf (editByPosition (Proxy @CodePoint) (Proxy @CharRope.Rope)) txt
+      , bench "text-rope-mixed" $ nf (editByPosition (Proxy @CodePoint) (Proxy @Mixed.Rope)) txt
 #ifdef MIN_VERSION_yi_rope
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"Unicode\" && $(NF-2) == \"Split at position\""
-      $ bench "yi-rope" $ nf (editByPosition (Proxy @YiRope.YiString)) txt
+      $ bench "yi-rope" $ nf (editByPosition (Proxy @CodePoint) (Proxy @YiRope.YiString)) txt
 #endif
       ]
     , bgroup "UTF-16"
-      [ bench "text-rope" $ nf (editByPosition (Proxy @Utf16Rope.Rope)) txt
+      [ bench "text-rope" $ nf (editByPosition (Proxy @Utf16) (Proxy @Utf16Rope.Rope)) txt
+      , bench "text-rope-mixed" $ nf (editByPosition (Proxy @Utf16) (Proxy @Mixed.Rope)) txt
 #ifdef MIN_VERSION_rope_utf16_splay
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"UTF-16\" && $(NF-2) == \"Split at position\""
-      $ bench "rope-utf16-splay" $ nf (editByPosition (Proxy @RopeSplay.Rope)) txt
+      $ bench "rope-utf16-splay" $ nf (editByPosition (Proxy @Utf16) (Proxy @RopeSplay.Rope)) txt
 #endif
       ]
     ]
   , bgroup "Split at offset"
     [ bgroup "Unicode"
-      [ bench "text-rope" $ nf (editByOffset (Proxy @CharRope.Rope)) txt
+      [ bench "text-rope" $ nf (editByOffset (Proxy @CodePoint) (Proxy @CharRope.Rope)) txt
+      , bench "text-rope-mixed" $ nf (editByOffset (Proxy @CodePoint) (Proxy @Mixed.Rope)) txt
 #ifdef MIN_VERSION_core_text
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"Unicode\" && $(NF-2) == \"Split at offset\""
-      $ bench "core-text" $ nf (editByOffset (Proxy @CoreText.Rope)) txt
+      $ bench "core-text" $ nf (editByOffset (Proxy @CodePoint) (Proxy @CoreText.Rope)) txt
 #endif
 #ifdef MIN_VERSION_yi_rope
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"Unicode\" && $(NF-2) == \"Split at offset\""
-      $ bench "yi-rope" $ nf (editByOffset (Proxy @YiRope.YiString)) txt
+      $ bench "yi-rope" $ nf (editByOffset (Proxy @Utf16) (Proxy @YiRope.YiString)) txt
 #endif
       ]
     , bgroup "UTF-16"
-      [ bench "text-rope" $ nf (editByOffset (Proxy @Utf16Rope.Rope)) txt
+      [ bench "text-rope" $ nf (editByOffset (Proxy @Utf16) (Proxy @Utf16Rope.Rope)) txt
+      , bench "text-rope-mixed" $ nf (editByOffset (Proxy @Utf16) (Proxy @Mixed.Rope)) txt
 #ifdef MIN_VERSION_rope_utf16_splay
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"UTF-16\" && $(NF-2) == \"Split at offset\""
-      $ bench "rope-utf16-splay" $ nf (editByOffset (Proxy @RopeSplay.Rope)) txt
+      $ bench "rope-utf16-splay" $ nf (editByOffset (Proxy @Utf16) (Proxy @RopeSplay.Rope)) txt
 #endif
       ]
     ]
@@ -102,76 +111,104 @@ randomPositions = take (1000 * scale) $ zip ls cs
     cs = randomRs (0, 80) (mkStdGen 24)
 {-# NOINLINE randomPositions #-}
 
-class Monoid a => Splittable a where
+class Monoid a => Textable a where
   fromText :: T.Text -> a
   toText :: a -> T.Text
-  splitAt :: Word -> a -> (a, a)
 
-class Splittable a => SplittableAtPosition a where
-  splitAtPosition :: Word -> Word -> a -> (a, a)
+class Textable t => Splittable u t where
+  splitAt :: Proxy u -> Word -> t -> (t, t)
 
-instance Splittable CharRope.Rope where
+class Splittable u t => SplittableAtPosition u t where
+  splitAtPosition :: Proxy u -> Word -> Word -> t -> (t, t)
+
+instance Textable CharRope.Rope where
   fromText = CharRope.fromText
   toText = CharRope.toText
-  splitAt = CharRope.splitAt
 
-instance SplittableAtPosition CharRope.Rope where
-  splitAtPosition l c = CharRope.splitAtPosition (CharRope.Position l c)
+instance Splittable CodePoint CharRope.Rope where
+  splitAt _ = CharRope.splitAt
 
-instance Splittable Utf16Rope.Rope where
+instance SplittableAtPosition CodePoint CharRope.Rope where
+  splitAtPosition _ l c = CharRope.splitAtPosition (CharRope.Position l c)
+
+instance Textable Utf16Rope.Rope where
   fromText = Utf16Rope.fromText
   toText = Utf16Rope.toText
-  splitAt = (fromJust . ) . Utf16Rope.splitAt
 
-instance SplittableAtPosition Utf16Rope.Rope where
-  splitAtPosition l c = fromJust . Utf16Rope.splitAtPosition (Utf16Rope.Position l c)
+instance Splittable Utf16 Utf16Rope.Rope where
+  splitAt _ = (fromJust . ) . Utf16Rope.splitAt
+
+instance SplittableAtPosition Utf16 Utf16Rope.Rope where
+  splitAtPosition _ l c = fromJust . Utf16Rope.splitAtPosition (Utf16Rope.Position l c)
+
+instance Textable Mixed.Rope where
+  fromText = Mixed.fromText
+  toText = Mixed.toText
+
+instance Splittable CodePoint Mixed.Rope where
+  splitAt _ = Mixed.charSplitAt
+
+instance SplittableAtPosition CodePoint Mixed.Rope where
+  splitAtPosition _ l c = Mixed.charSplitAtPosition (CharRope.Position l c)
+
+instance Splittable Utf16 Mixed.Rope where
+  splitAt _ = (fromJust . ) . Mixed.utf16SplitAt
+
+instance SplittableAtPosition Utf16 Mixed.Rope where
+  splitAtPosition _ l c = fromJust . Mixed.utf16SplitAtPosition (Utf16Rope.Position l c)
 
 #ifdef MIN_VERSION_core_text
-instance Splittable CoreText.Rope where
+instance Textable CoreText.Rope where
   fromText = CoreText.intoRope
   toText = CoreText.fromRope
-  splitAt = CoreText.splitRope . fromIntegral
+
+instance SplittableAtPosition CodePoint CoreText.Rope where
+  splitAt _ = CoreText.splitRope . fromIntegral
 #endif
 
 #ifdef MIN_VERSION_yi_rope
-instance Splittable YiRope.YiString where
+instance Textable YiRope.YiString where
   fromText = YiRope.fromText
   toText = YiRope.toText
-  splitAt = YiRope.splitAt . fromIntegral
 
-instance SplittableAtPosition YiRope.YiString where
-  splitAtPosition l c orig = (before `mappend` mid, after)
+instance Splittable CodePoint YiRope.YiString where
+  splitAt _ = YiRope.splitAt . fromIntegral
+
+instance SplittableAtPosition CodePoint YiRope.YiString where
+  splitAtPosition _ l c orig = (before `mappend` mid, after)
     where
       (before, after') = YiRope.splitAtLine (fromIntegral l) orig
       (mid, after) = YiRope.splitAt (fromIntegral c) after'
 #endif
 
 #ifdef MIN_VERSION_rope_utf16_splay
-instance Splittable RopeSplay.Rope where
+instance Textable RopeSplay.Rope where
   fromText = RopeSplay.fromText
   toText = RopeSplay.toText
-  splitAt = RopeSplay.splitAt . fromIntegral
 
-instance SplittableAtPosition RopeSplay.Rope where
-  splitAtPosition l c orig = RopeSplay.splitAt k orig
+instance Splittable Utf16 RopeSplay.Rope where
+  splitAt _ = RopeSplay.splitAt . fromIntegral
+
+instance SplittableAtPosition Utf16 RopeSplay.Rope where
+  splitAtPosition _ l c orig = RopeSplay.splitAt k orig
     where
       k = RopeSplay.rowColumnCodeUnits (RopeSplay.RowColumn (fromIntegral l) (fromIntegral c)) orig
 #endif
 
-editByOffset :: forall a. Splittable a => Proxy a -> T.Text -> T.Text
-editByOffset _ txt = (toText @a) $ foldl' edit (fromText txt) randomOffsets
+editByOffset :: forall u t. Splittable u t => Proxy u -> Proxy t -> T.Text -> T.Text
+editByOffset _ _ txt = (toText @t) $ foldl' edit (fromText txt) randomOffsets
   where
     edit orig c = before `mappend` mid `mappend` after
       where
-        (before, after') = splitAt c orig
+        (before, after') = splitAt (Proxy @u) c orig
         -- edit 10 characters
-        (mid, after) = splitAt 10 after'
+        (mid, after) = splitAt (Proxy @u) 10 after'
 
-editByPosition :: forall a. SplittableAtPosition a => Proxy a -> T.Text -> T.Text
-editByPosition _ txt = (toText @a) $ foldl' edit (fromText txt) randomPositions
+editByPosition :: forall u t. SplittableAtPosition u t => Proxy u -> Proxy t -> T.Text -> T.Text
+editByPosition _ _ txt = (toText @t) $ foldl' edit (fromText txt) randomPositions
   where
     edit orig (l, c) = before `mappend` mid `mappend` after
       where
-        (before, after') = splitAtPosition l c orig
+        (before, after') = splitAtPosition (Proxy @u) l c orig
         -- edit 10 characters
-        (mid, after) = splitAt 10 after'
+        (mid, after) = splitAt (Proxy @u) 10 after'
