@@ -71,23 +71,45 @@ import Text.Show (show)
 data Rope
   = Empty
   | Node
-    { _ropeLeft         :: !Rope
-    , _ropeMiddle       :: !TL.TextLines
-    , _ropeRight        :: !Rope
-    , _ropeCharLen      :: !Word
-    , _ropeCharLenAsPos :: !Position
+    { _ropeLeft    :: !Rope
+    , _ropeMiddle  :: !TL.TextLines
+    , _ropeRight   :: !Rope
+    , _ropeMetrics :: {-# UNPACK #-} !Metrics
     }
+
+data Metrics = Metrics
+  { _metricsCharLen      :: !Word
+  , _metricsCharLenAsPos :: !Position
+  }
 
 instance NFData Rope where
   rnf Empty = ()
   -- No need to deepseq strict fields, for which WHNF = NF
-  rnf (Node l _ r _ _) = rnf l `seq` rnf r
+  rnf (Node l _ r _) = rnf l `seq` rnf r
 
 instance Eq Rope where
   (==) = (==) `on` toLazyText
 
 instance Ord Rope where
   compare = compare `on` toLazyText
+
+instance Semigroup Metrics where
+  Metrics c1 p1 <> Metrics c2 p2 =
+    Metrics (c1 + c2) (p1 <> p2)
+
+instance Monoid Metrics where
+  mempty = Metrics 0 mempty
+
+metrics :: Rope -> Metrics
+metrics = \case
+  Empty -> mempty
+  Node _ _ _ m -> m
+
+linesMetrics :: TL.TextLines -> Metrics
+linesMetrics tl = Metrics
+  { _metricsCharLen = TL.length tl
+  , _metricsCharLenAsPos = TL.lengthAsPosition tl
+  }
 
 #ifdef DEBUG
 deriving instance Show Rope
@@ -114,9 +136,7 @@ null = \case
 -- 4
 --
 length :: Rope -> Word
-length = \case
-  Empty -> 0
-  Node _ _ _ w _ -> w
+length = _metricsCharLen . metrics
 
 -- | Measure text length as an amount of lines and columns, O(1).
 --
@@ -129,47 +149,41 @@ length = \case
 -- Position {posLine = 2, posColumn = 0}
 --
 lengthAsPosition :: Rope -> Position
-lengthAsPosition = \case
-  Empty -> mempty
-  Node _ _ _ _ p -> p
+lengthAsPosition = _metricsCharLenAsPos . metrics
 
 instance Semigroup Rope where
   Empty <> t = t
   t <> Empty = t
-  Node l1 c1 r1 u1 p1 <> Node l2 c2 r2 u2 p2 = defragment
+  Node l1 c1 r1 m1 <> Node l2 c2 r2 m2 = defragment
     l1
     c1
-    (Node (r1 <> l2) c2 r2 (length r1 + u2) (lengthAsPosition r1 <> p2))
-    (u1 + u2)
-    (p1 <> p2)
+    (Node (r1 <> l2) c2 r2 (metrics r1 <> m2))
+    (m1 <> m2)
 
 instance Monoid Rope where
   mempty = Empty
   mappend = (<>)
 
-defragment :: HasCallStack => Rope -> TL.TextLines -> Rope -> Word -> Position -> Rope
-defragment !l !c !r !u !p
+defragment :: HasCallStack => Rope -> TL.TextLines -> Rope -> Metrics -> Rope
+defragment !l !c !r !m
 #ifdef DEBUG
   | TL.null c = error "Data.Text.Lines: violated internal invariant"
 #endif
-  | u < DEFRAGMENTATION_THRESHOLD
-  = Node Empty (toTextLines rp) Empty u p
+  | _metricsCharLen m < DEFRAGMENTATION_THRESHOLD
+  = Node Empty (toTextLines rp) Empty m
   | otherwise
   = rp
   where
-    rp = Node l c r u p
+    rp = Node l c r m
 
 -- | Create from 'TL.TextLines', linear time.
 fromTextLines :: TL.TextLines -> Rope
 fromTextLines tl
   | TL.null tl = Empty
-  | otherwise = Node Empty tl Empty (TL.length tl) (TL.lengthAsPosition tl)
+  | otherwise = Node Empty tl Empty (linesMetrics tl)
 
 node :: HasCallStack => Rope -> TL.TextLines -> Rope -> Rope
-node l c r = defragment l c r totalLength totalLengthAsPosition
-  where
-    totalLength = length l + TL.length c + length r
-    totalLengthAsPosition = lengthAsPosition l <> TL.lengthAsPosition c <> lengthAsPosition r
+node l c r = defragment l c r (metrics l <> linesMetrics c <> metrics r)
 
 (|>) :: Rope -> TL.TextLines -> Rope
 tr |> tl
@@ -190,7 +204,7 @@ foldMapRope f = go
   where
     go = \case
       Empty -> mempty
-      Node l c r _ _ -> go l `mappend` f c `mappend` go r
+      Node l c r _ -> go l `mappend` f c `mappend` go r
 
 data Lines = Lines ![Text] !Bool
 
@@ -231,8 +245,8 @@ lastChar :: Rope -> Maybe Char
 lastChar = \case
   Empty -> Nothing
   -- This assumes that there are no empty chunks:
-  Node _ c Empty _ _ -> Just $ T.last $ TL.toText c
-  Node _ _ r _ _ -> lastChar r
+  Node _ c Empty _ -> Just $ T.last $ TL.toText c
+  Node _ _ r _ -> lastChar r
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in logarithmic time.
 --
@@ -277,7 +291,7 @@ toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText 
 splitAt :: HasCallStack => Word -> Rope -> (Rope, Rope)
 splitAt !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _
+  Node l c r _
     | len <= ll -> case splitAt len l of
         (before, after) -> (before, node after c r)
     | len <= llc -> case TL.splitAt (len - ll) c of
@@ -297,7 +311,7 @@ splitAt !len = \case
 splitAtLine :: HasCallStack => Word -> Rope -> (Rope, Rope)
 splitAtLine !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _
+  Node l c r _
     | len <= ll -> case splitAtLine len l of
       (before, after) -> (before, node after c r)
     | len <= llc -> case TL.splitAtLine (len - ll) c of
@@ -345,7 +359,7 @@ splitAtPosition :: HasCallStack => Position -> Rope -> (Rope, Rope)
 splitAtPosition (Position 0 0) = (mempty,)
 splitAtPosition !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _
+  Node l c r _
     | len <= ll -> case splitAtPosition len l of
       (before, after)
         | null after -> case splitAtPosition len' (c <| r) of

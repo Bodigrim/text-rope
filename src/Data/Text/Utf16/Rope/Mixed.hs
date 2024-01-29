@@ -78,25 +78,49 @@ import Text.Show (show)
 data Rope
   = Empty
   | Node
-    { _ropeLeft          :: !Rope
-    , _ropeMiddle        :: !TextLines
-    , _ropeRight         :: !Rope
-    , _ropeCharLen       :: !Word
-    , _ropeCharLenAsPos  :: !Char.Position
-    , _ropeUtf16Len      :: !Word
-    , _ropeUtf16LenAsPos :: !Utf16.Position
+    { _ropeLeft    :: !Rope
+    , _ropeMiddle  :: !TextLines
+    , _ropeRight   :: !Rope
+    , _ropeMetrics :: {-# UNPACK #-} !Metrics
     }
+
+data Metrics = Metrics
+  { _metricsCharLen       :: !Word
+  , _metricsCharLenAsPos  :: !Char.Position
+  , _metricsUtf16Len      :: !Word
+  , _metricsUtf16LenAsPos :: !Utf16.Position
+  }
 
 instance NFData Rope where
   rnf Empty = ()
   -- No need to deepseq strict fields, for which WHNF = NF
-  rnf (Node l _ r _ _ _ _) = rnf l `seq` rnf r
+  rnf (Node l _ r _) = rnf l `seq` rnf r
 
 instance Eq Rope where
   (==) = (==) `on` toLazyText
 
 instance Ord Rope where
   compare = compare `on` toLazyText
+
+instance Semigroup Metrics where
+  Metrics c1 p1 u1 up1 <> Metrics c2 p2 u2 up2 =
+    Metrics (c1 + c2) (p1 <> p2) (u1 + u2) (up1 <> up2)
+
+instance Monoid Metrics where
+  mempty = Metrics 0 mempty 0 mempty
+
+metrics :: Rope -> Metrics
+metrics = \case
+  Empty -> mempty
+  Node _ _ _ m -> m
+
+linesMetrics :: Char.TextLines -> Metrics
+linesMetrics tl = Metrics
+  { _metricsCharLen = Char.length tl
+  , _metricsCharLenAsPos = Char.lengthAsPosition tl
+  , _metricsUtf16Len = Utf16.length tl
+  , _metricsUtf16LenAsPos = Utf16.lengthAsPosition tl
+  }
 
 #ifdef DEBUG
 deriving instance Show Rope
@@ -121,9 +145,7 @@ null = \case
 -- 3
 --
 charLength :: Rope -> Word
-charLength = \case
-  Empty -> 0
-  Node _ _ _ w _ _ _ -> w
+charLength = _metricsCharLen . metrics
 
 -- | Length in UTF-16 code units, O(1).
 --
@@ -132,9 +154,7 @@ charLength = \case
 -- 4
 --
 utf16Length :: Rope -> Word
-utf16Length = \case
-  Empty -> 0
-  Node _ _ _ _ _ w _ -> w
+utf16Length = _metricsUtf16Len . metrics
 
 -- | Measure text length as an amount of lines and columns, O(1).
 --
@@ -147,9 +167,7 @@ utf16Length = \case
 -- Position {posLine = 2, posColumn = 0}
 --
 charLengthAsPosition :: Rope -> Char.Position
-charLengthAsPosition = \case
-  Empty -> mempty
-  Node _ _ _ _ p _ _ -> p
+charLengthAsPosition = _metricsCharLenAsPos . metrics
 
 -- | Measure text length as an amount of lines and columns, O(1).
 --
@@ -162,51 +180,41 @@ charLengthAsPosition = \case
 -- Position {posLine = 2, posColumn = 0}
 --
 utf16LengthAsPosition :: Rope -> Utf16.Position
-utf16LengthAsPosition = \case
-  Empty -> mempty
-  Node _ _ _ _ _ _ p -> p
+utf16LengthAsPosition = _metricsUtf16LenAsPos . metrics
 
 instance Semigroup Rope where
   Empty <> t = t
   t <> Empty = t
-  Node l1 c1 r1 u1 p1 u1' p1' <> Node l2 c2 r2 u2 p2 u2' p2' = defragment
+  Node l1 c1 r1 m1 <> Node l2 c2 r2 m2 = defragment
     l1
     c1
-    (Node (r1 <> l2) c2 r2 (charLength r1 + u2) (charLengthAsPosition r1 <> p2) (utf16Length r1 + u2') (utf16LengthAsPosition r1 <> p2'))
-    (u1 + u2)
-    (p1 <> p2)
-    (u1' + u2')
-    (p1' <> p2')
+    (Node (r1 <> l2) c2 r2 (metrics r1 <> m2))
+    (m1 <> m2)
 
 instance Monoid Rope where
   mempty = Empty
   mappend = (<>)
 
-defragment :: HasCallStack => Rope -> TextLines -> Rope -> Word -> Char.Position -> Word -> Utf16.Position -> Rope
-defragment !l !c !r !u !p !u' !p'
+defragment :: HasCallStack => Rope -> TextLines -> Rope -> Metrics -> Rope
+defragment !l !c !r !m
 #ifdef DEBUG
   | TL.null c = error "Data.Text.Lines: violated internal invariant"
 #endif
-  | u < DEFRAGMENTATION_THRESHOLD
-  = Node Empty (toTextLines rp) Empty u p u' p'
+  | _metricsUtf16Len m < DEFRAGMENTATION_THRESHOLD
+  = Node Empty (toTextLines rp) Empty m
   | otherwise
   = rp
   where
-    rp = Node l c r u p u' p'
+    rp = Node l c r m
 
 -- | Create from 'TextLines', linear time.
 fromTextLines :: TextLines -> Rope
 fromTextLines tl
   | TL.null tl = Empty
-  | otherwise = Node Empty tl Empty (Char.length tl) (Char.lengthAsPosition tl) (Utf16.length tl) (Utf16.lengthAsPosition tl)
+  | otherwise = Node Empty tl Empty (linesMetrics tl)
 
 node :: HasCallStack => Rope -> TextLines -> Rope -> Rope
-node l c r = defragment l c r totalLength totalLengthAsPosition totalLength' totalLengthAsPosition'
-  where
-    totalLength = charLength l + Char.length c + charLength r
-    totalLengthAsPosition = charLengthAsPosition l <> Char.lengthAsPosition c <> charLengthAsPosition r
-    totalLength' = utf16Length l + Utf16.length c + utf16Length r
-    totalLengthAsPosition' = utf16LengthAsPosition l <> Utf16.lengthAsPosition c <> utf16LengthAsPosition r
+node l c r = defragment l c r (metrics l <> linesMetrics c <> metrics r)
 
 (|>) :: Rope -> TextLines -> Rope
 tr |> tl
@@ -227,7 +235,7 @@ foldMapRope f = go
   where
     go = \case
       Empty -> mempty
-      Node l c r _ _ _ _ -> go l `mappend` f c `mappend` go r
+      Node l c r _ -> go l `mappend` f c `mappend` go r
 
 data Lines = Lines ![Text] !Bool
 
@@ -268,8 +276,8 @@ lastChar :: Rope -> Maybe Char
 lastChar = \case
   Empty -> Nothing
   -- This assumes that there are no empty chunks:
-  Node _ c Empty _ _ _ _ -> Just $ T.last $ TL.toText c
-  Node _ _ r _ _ _ _ -> lastChar r
+  Node _ c Empty _ -> Just $ T.last $ TL.toText c
+  Node _ _ r _ -> lastChar r
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in logarithmic time.
 --
@@ -314,7 +322,7 @@ toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText 
 charSplitAt :: HasCallStack => Word -> Rope -> (Rope, Rope)
 charSplitAt !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r _
     | len <= ll -> case charSplitAt len l of
         (before, after) -> (before, node after c r)
     | len <= llc -> case Char.splitAt (len - ll) c of
@@ -336,7 +344,7 @@ charSplitAt !len = \case
 utf16SplitAt :: HasCallStack => Word -> Rope -> Maybe (Rope, Rope)
 utf16SplitAt !len = \case
   Empty -> Just (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r _
     | len <= ll -> case utf16SplitAt len l of
         Nothing -> Nothing
         Just (before, after) -> Just (before, node after c r)
@@ -359,7 +367,7 @@ utf16SplitAt !len = \case
 splitAtLine :: HasCallStack => Word -> Rope -> (Rope, Rope)
 splitAtLine !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r _
     | len <= ll -> case splitAtLine len l of
       (before, after) -> (before, node after c r)
     | len <= llc -> case TL.splitAtLine (len - ll) c of
@@ -424,7 +432,7 @@ charSplitAtPosition :: HasCallStack => Char.Position -> Rope -> (Rope, Rope)
 charSplitAtPosition (Char.Position 0 0) = (mempty,)
 charSplitAtPosition !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r _
     | len <= ll -> case charSplitAtPosition len l of
       (before, after)
         | null after -> case charSplitAtPosition len' (c <| r) of
@@ -465,7 +473,7 @@ utf16SplitAtPosition :: HasCallStack => Utf16.Position -> Rope -> Maybe (Rope, R
 utf16SplitAtPosition (Utf16.Position 0 0) = Just . (mempty,)
 utf16SplitAtPosition !len = \case
   Empty -> Just (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r _
     | len <= ll -> case utf16SplitAtPosition len l of
       Nothing -> Nothing
       Just (before, after)
