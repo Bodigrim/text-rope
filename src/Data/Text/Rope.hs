@@ -53,6 +53,7 @@ import qualified Data.Text.Lazy as TextLazy
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lines (Position(..))
 import qualified Data.Text.Lines as TL
+import qualified Data.Text.Lines.Internal as TL (newlines)
 import Data.Word (Word)
 import Text.Show (Show)
 
@@ -78,7 +79,8 @@ data Rope
     }
 
 data Metrics = Metrics
-  { _metricsCharLen      :: !Word
+  { _metricsNewlines     :: !Word
+  , _metricsCharLen      :: !Word
   , _metricsCharLenAsPos :: !Position
   }
 
@@ -94,11 +96,11 @@ instance Ord Rope where
   compare = compare `on` toLazyText
 
 instance Semigroup Metrics where
-  Metrics c1 p1 <> Metrics c2 p2 =
-    Metrics (c1 + c2) (p1 <> p2)
+  Metrics nls1 c1 p1 <> Metrics nls2 c2 p2 =
+    Metrics (nls1 + nls2) (c1 + c2) (p1 <> p2)
 
 instance Monoid Metrics where
-  mempty = Metrics 0 mempty
+  mempty = Metrics 0 0 mempty
 
 metrics :: Rope -> Metrics
 metrics = \case
@@ -107,7 +109,8 @@ metrics = \case
 
 linesMetrics :: TL.TextLines -> Metrics
 linesMetrics tl = Metrics
-  { _metricsCharLen = TL.length tl
+  { _metricsNewlines = TL.newlines tl
+  , _metricsCharLen = TL.length tl
   , _metricsCharLenAsPos = TL.lengthAsPosition tl
   }
 
@@ -137,6 +140,23 @@ null = \case
 --
 length :: Rope -> Word
 length = _metricsCharLen . metrics
+
+-- | The number of newline characters, O(1).
+--
+-- >>> :set -XOverloadedStrings
+-- >>> newlines ""
+-- 0
+-- >>> newlines "foo"
+-- 0
+-- >>> newlines "foo\n"
+-- 1
+-- >>> newlines "foo\n\n"
+-- 2
+-- >>> newlines "foo\nbar"
+-- 1
+--
+newlines :: Rope -> Word
+newlines = _metricsNewlines . metrics
 
 -- | Measure text length as an amount of lines and columns, O(1).
 --

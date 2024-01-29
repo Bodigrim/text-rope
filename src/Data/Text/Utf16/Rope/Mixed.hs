@@ -56,7 +56,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TextLazy
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lines.Internal (TextLines)
-import qualified Data.Text.Lines.Internal as TL (null, fromText, toText, lines, splitAtLine)
+import qualified Data.Text.Lines.Internal as TL (null, fromText, toText, lines, splitAtLine, newlines)
 import qualified Data.Text.Lines as Char
 import qualified Data.Text.Utf16.Lines as Utf16
 import Data.Word (Word)
@@ -85,7 +85,8 @@ data Rope
     }
 
 data Metrics = Metrics
-  { _metricsCharLen       :: !Word
+  { _metricsNewlines      :: !Word
+  , _metricsCharLen       :: !Word
   , _metricsCharLenAsPos  :: !Char.Position
   , _metricsUtf16Len      :: !Word
   , _metricsUtf16LenAsPos :: !Utf16.Position
@@ -103,11 +104,11 @@ instance Ord Rope where
   compare = compare `on` toLazyText
 
 instance Semigroup Metrics where
-  Metrics c1 p1 u1 up1 <> Metrics c2 p2 u2 up2 =
-    Metrics (c1 + c2) (p1 <> p2) (u1 + u2) (up1 <> up2)
+  Metrics nls1 c1 p1 u1 up1 <> Metrics nls2 c2 p2 u2 up2 =
+    Metrics (nls1 + nls2) (c1 + c2) (p1 <> p2) (u1 + u2) (up1 <> up2)
 
 instance Monoid Metrics where
-  mempty = Metrics 0 mempty 0 mempty
+  mempty = Metrics 0 0 mempty 0 mempty
 
 metrics :: Rope -> Metrics
 metrics = \case
@@ -116,7 +117,8 @@ metrics = \case
 
 linesMetrics :: Char.TextLines -> Metrics
 linesMetrics tl = Metrics
-  { _metricsCharLen = Char.length tl
+  { _metricsNewlines = TL.newlines tl
+  , _metricsCharLen = Char.length tl
   , _metricsCharLenAsPos = Char.lengthAsPosition tl
   , _metricsUtf16Len = Utf16.length tl
   , _metricsUtf16LenAsPos = Utf16.lengthAsPosition tl
@@ -155,6 +157,23 @@ charLength = _metricsCharLen . metrics
 --
 utf16Length :: Rope -> Word
 utf16Length = _metricsUtf16Len . metrics
+
+-- | The number of newline characters, O(1).
+--
+-- >>> :set -XOverloadedStrings
+-- >>> newlines ""
+-- 0
+-- >>> newlines "foo"
+-- 0
+-- >>> newlines "foo\n"
+-- 1
+-- >>> newlines "foo\n\n"
+-- 2
+-- >>> newlines "foo\nbar"
+-- 1
+--
+newlines :: Rope -> Word
+newlines = _metricsNewlines . metrics
 
 -- | Measure text length as an amount of lines and columns, O(1).
 --
