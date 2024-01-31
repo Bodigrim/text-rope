@@ -6,7 +6,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Utils
-  ( utf16Length
+  ( utf8Length
+  , utf16Length
   ) where
 
 import Prelude (mod, (+), (-), maxBound)
@@ -14,11 +15,13 @@ import Control.Applicative (pure, (<$>), (<*>))
 import Data.Char (Char)
 import Data.Function (($), (.))
 import qualified Data.List as L
-import Data.Ord ((>))
+import Data.Ord ((>), (>=))
 import qualified Data.Text as T
 import Data.Text.Internal (Text(..))
 import qualified Data.Text.Lines as Char
 import qualified Data.Text.Rope as CharRope
+import qualified Data.Text.Utf8.Lines as Utf8
+import qualified Data.Text.Utf8.Rope as Utf8Rope
 import qualified Data.Text.Utf16.Lines as Utf16
 import qualified Data.Text.Utf16.Rope as Utf16Rope
 import qualified Data.Text.Utf16.Rope.Mixed as MixedRope
@@ -27,6 +30,15 @@ import Test.Tasty.QuickCheck (Gen, Arbitrary (arbitrary), arbitrary, shrink, fre
 import Data.Monoid (mconcat, mappend)
 import Data.Bool (otherwise)
 import Data.Maybe (maybe)
+
+utf8Length :: Text -> Word
+utf8Length t =
+  L.genericLength xs +
+  L.genericLength (L.filter (>= '\x0080') xs) +
+  L.genericLength (L.filter (>= '\x0800') xs) +
+  L.genericLength (L.filter (>= '\x10000') xs)
+  where
+    xs = T.unpack t
 
 utf16Length :: Text -> Word
 utf16Length t = L.genericLength xs + L.genericLength (L.filter (> '\xFFFF') xs)
@@ -66,6 +78,16 @@ instance Arbitrary Char.Position where
     ]
   shrink (Char.Position x y) =
     [Char.Position x' y | x' <- shrink x] L.++ [Char.Position x y' | y' <- shrink y]
+
+instance Arbitrary Utf8.Position where
+  arbitrary = oneof
+    [ Utf8.Position <$> arbitrary <*> arbitrary
+    , (\l -> Utf8.Position (maxBound - l)) <$> arbitrary <*> arbitrary
+    , (\l c -> Utf8.Position l (maxBound - c)) <$> arbitrary <*> arbitrary
+    , (\l c -> Utf8.Position (maxBound - l) (maxBound - c)) <$> arbitrary <*> arbitrary
+    ]
+  shrink (Utf8.Position x y) =
+    [Utf8.Position x' y | x' <- shrink x] L.++ [Utf8.Position x y' | y' <- shrink y]
 
 instance Arbitrary Utf16.Position where
   arbitrary = oneof

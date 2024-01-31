@@ -33,6 +33,7 @@ library
   exposed-modules:
     Data.Text.Lines
     Data.Text.Rope
+    Data.Text.Utf8.Lines
     Data.Text.Utf16.Lines
     Data.Text.Utf16.Rope
     Data.Text.Utf16.Rope.Mixed
@@ -60,6 +61,7 @@ test-suite text-rope-tests
     CharLines
     CharRope
     MixedRope
+    Utf8Lines
     Utf16Lines
     Utf16Rope
     Utils
