@@ -30,6 +30,7 @@ import System.Random (randomRs, mkStdGen)
 import Test.Tasty.Bench (defaultMain, bgroup, bench, nf, bcompare)
 
 import qualified Data.Text.Rope as CharRope
+import qualified Data.Text.Utf8.Rope as Utf8Rope
 import qualified Data.Text.Utf16.Rope as Utf16Rope
 import qualified Data.Text.Utf16.Rope.Mixed as Mixed
 #ifdef MIN_VERSION_core_text
@@ -43,6 +44,7 @@ import qualified Yi.Rope as YiRope
 #endif
 
 data CodePoint
+data Utf8
 data Utf16
 
 main :: IO ()
@@ -63,6 +65,10 @@ main = defaultMain
       , bcompare "$NF == \"text-rope\" && $(NF-1) == \"UTF-16\" && $(NF-2) == \"Split at position\""
       $ bench "rope-utf16-splay" $ nf (editByPosition (Proxy @Utf16) (Proxy @RopeSplay.Rope)) txt
 #endif
+      ]
+    , bgroup "UTF-8"
+      [ bench "text-rope" $ nf (editByPosition (Proxy @Utf8) (Proxy @Utf8Rope.Rope)) txtUtf8
+      , bench "text-rope-mixed" $ nf (editByPosition (Proxy @Utf8) (Proxy @Mixed.Rope)) txtUtf8
       ]
     ]
   , bgroup "Split at offset"
@@ -86,6 +92,10 @@ main = defaultMain
       $ bench "rope-utf16-splay" $ nf (editByOffset (Proxy @Utf16) (Proxy @RopeSplay.Rope)) txt
 #endif
       ]
+    , bgroup "UTF-8"
+      [ bench "text-rope" $ nf (editByOffset (Proxy @Utf8) (Proxy @Utf8Rope.Rope)) txtUtf8
+      , bench "text-rope-mixed" $ nf (editByOffset (Proxy @Utf8) (Proxy @Mixed.Rope)) txtUtf8
+      ]
     ]
   ]
 
@@ -97,6 +107,12 @@ txt = unsafePerformIO $ do
   fn <- getDataFileName "bench/bench.txt"
   T.replicate scale <$> T.readFile fn
 {-# NOINLINE txt #-}
+
+txtUtf8 :: T.Text
+txtUtf8 = unsafePerformIO $ do
+  fn <- getDataFileName "bench/bench-utf8.txt"
+  T.replicate scale <$> T.readFile fn
+{-# NOINLINE txtUtf8 #-}
 
 randomOffsets :: [Word]
 randomOffsets = take (1000 * scale) $
@@ -131,6 +147,16 @@ instance Splittable CodePoint CharRope.Rope where
 instance SplittableAtPosition CodePoint CharRope.Rope where
   splitAtPosition _ l c = CharRope.splitAtPosition (CharRope.Position l c)
 
+instance Textable Utf8Rope.Rope where
+  fromText = Utf8Rope.fromText
+  toText = Utf8Rope.toText
+
+instance Splittable Utf8 Utf8Rope.Rope where
+  splitAt _ = (fromJust . ) . Utf8Rope.splitAt
+
+instance SplittableAtPosition Utf8 Utf8Rope.Rope where
+  splitAtPosition _ l c = fromJust . Utf8Rope.splitAtPosition (Utf8Rope.Position l c)
+
 instance Textable Utf16Rope.Rope where
   fromText = Utf16Rope.fromText
   toText = Utf16Rope.toText
@@ -150,6 +176,12 @@ instance Splittable CodePoint Mixed.Rope where
 
 instance SplittableAtPosition CodePoint Mixed.Rope where
   splitAtPosition _ l c = Mixed.charSplitAtPosition (CharRope.Position l c)
+
+instance Splittable Utf8 Mixed.Rope where
+  splitAt _ = (fromJust . ) . Mixed.utf8SplitAt
+
+instance SplittableAtPosition Utf8 Mixed.Rope where
+  splitAtPosition _ l c = fromJust . Mixed.utf8SplitAtPosition (Utf8Rope.Position l c)
 
 instance Splittable Utf16 Mixed.Rope where
   splitAt _ = (fromJust . ) . Mixed.utf16SplitAt
