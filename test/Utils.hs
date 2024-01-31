@@ -109,6 +109,16 @@ instance Arbitrary CharRope.Rope where
     | otherwise = L.concatMap (\i -> (\(x, y) -> [x, y]) (CharRope.splitAt i rp))
                   [1..CharRope.length rp - 1]
 
+instance Arbitrary Utf8Rope.Rope where
+  arbitrary = frequency
+    [ (9, mconcat . L.map Utf8Rope.fromText <$> arbitrary)
+    , (1, mappend <$> arbitrary <*> arbitrary)
+    ]
+  shrink rp
+    | Utf8Rope.null rp = []
+    | otherwise = L.concatMap (\i -> maybe [] (\(x, y) -> [x, y]) (Utf8Rope.splitAt i rp))
+                  [1..Utf8Rope.length rp - 1]
+
 instance Arbitrary Utf16Rope.Rope where
   arbitrary = frequency
     [ (9, mconcat . L.map Utf16Rope.fromText <$> arbitrary)
