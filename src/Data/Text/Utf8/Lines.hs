@@ -30,6 +30,7 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
 import Data.Ord (Ord, (<=), (>), (>=))
 import Data.Semigroup (Semigroup(..))
+import qualified Data.Text.Array as TA
 import Data.Text.Internal (Text(..))
 import qualified Data.Text.Lines.Internal as I
 import qualified Data.Vector.Unboxed as U
@@ -38,10 +39,13 @@ import Text.Show (Show)
 
 #if MIN_VERSION_text(2,0,0)
 import Data.Bits ((.&.))
-import qualified Data.Text.Array as TA
 #else
-import Prelude ()
-import qualified Data.Text as T (unpack, foldl')
+import Prelude (fromIntegral)
+import Foreign.C.Types (CSize(..))
+import GHC.Exts (ByteArray#)
+import System.IO (IO)
+import System.IO.Unsafe (unsafeDupablePerformIO)
+import System.Posix.Types (CSsize(..))
 #endif
 
 #ifdef DEBUG
@@ -54,13 +58,11 @@ lengthTextUtf8 :: Text -> Word
 #if MIN_VERSION_text(2,0,0)
 lengthTextUtf8 (Text _ _ len) = I.intToWord len
 #else
-lengthTextUtf8 = T.foldl' go 0
-  where
-    go l c
-      | c >= '\x10000' = l + 4
-      | c >= '\x800' = l + 3
-      | c >= '\x80' = l + 2
-      | otherwise = l + 1
+lengthTextUtf8 (Text (TA.Array arr) off len) = fromIntegral $ unsafeDupablePerformIO $
+  lengthUtf16AsUtf8 arr (fromIntegral off) (fromIntegral len)
+
+foreign import ccall unsafe "_hs_text_lines_length_utf16_as_utf8" lengthUtf16AsUtf8
+  :: ByteArray# -> CSize -> CSize -> IO CSsize
 #endif
 
 -- | Length in UTF-8 code units.
@@ -125,17 +127,15 @@ splitTextAtUtf8Index k t@(Text arr off len)
       k' = I.wordToInt k
       c = TA.unsafeIndex arr (off + k')
 #else
-  | otherwise = go (T.unpack t) 0 0
+  | o >= 0 = Just (Text arr off o, Text arr (off + o) (len - o))
+  | otherwise = Nothing
     where
-      go _ i8 i16
-        | i8 > k = Nothing
-        | i8 == k = Just (Text arr off i16, Text arr (off + i16) (len - i16))
-      go [] _ _ = Just (t, mempty)
-      go (c:cs) i8 i16
-        | c >= '\x10000' = go cs (i8 + 4) (i16 + 2)
-        | c >= '\x800' = go cs (i8 + 3) (i16 + 1)
-        | c >= '\x80' = go cs (i8 + 2) (i16 + 1)
-        | otherwise = go cs (i8 + 1) (i16 + 1)
+      !(TA.Array arr#) = arr
+      o = fromIntegral $ unsafeDupablePerformIO $
+        takeUtf16AsUtf8 arr# (fromIntegral off) (fromIntegral len) (fromIntegral k)
+
+foreign import ccall unsafe "_hs_text_lines_take_utf16_as_utf8" takeUtf16AsUtf8
+  :: ByteArray# -> CSize -> CSize -> CSize -> IO CSsize
 #endif
 
 -- | Combination of 'I.splitAtLine' and subsequent 'splitAt'.
