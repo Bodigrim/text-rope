@@ -66,6 +66,30 @@ ssize_t _hs_text_lines_length_utf8_as_utf16(const uint8_t *arr, size_t off, size
   return ret;
 }
 
+ssize_t _hs_text_lines_length_utf16_as_utf8(const uint16_t *arr, size_t off, size_t len)
+{
+  const uint16_t *src = arr + off;
+  const uint16_t *srcend = src + len;
+  ssize_t ret = 0;
+
+  while (src < srcend){
+    uint16_t codeUnit = *src++;
+
+    if (codeUnit < 0x80){
+      ret += 1;
+    } else if (codeUnit < 0x800){
+      ret += 2;
+    } else if (codeUnit >= 0xd800 && codeUnit <= 0xdbff){
+      src++;
+      ret += 4;
+    } else {
+      ret += 3;
+    }
+  }
+
+  return ret;
+}
+
 ssize_t _hs_text_lines_take_utf8_as_utf16(const uint8_t *arr, size_t off, size_t len, size_t cnt)
 {
   const uint8_t *src = arr + off;
@@ -109,6 +133,32 @@ ssize_t _hs_text_lines_take_utf8_as_utf16(const uint8_t *arr, size_t off, size_t
       if(cnt < 2) return -1;
       cnt-=2;
       src+=3;
+    }
+  }
+
+  return src - arr - off;
+}
+
+ssize_t _hs_text_lines_take_utf16_as_utf8(const uint16_t *arr, size_t off, size_t len, size_t cnt)
+{
+  const uint16_t *src = arr + off;
+  const uint16_t *srcend = src + len;
+
+  while (src < srcend && cnt > 0){
+    uint16_t codeUnit = *src++;
+
+    if (codeUnit < 0x80){
+      cnt -= 1;
+    } else if (codeUnit < 0x800){
+      if (cnt < 2) return -1;
+      cnt -= 2;
+    } else if (codeUnit >= 0xd800 && codeUnit <= 0xdbff){
+      src++;
+      if (cnt < 4) return -1;
+      cnt -= 4;
+    } else {
+      if (cnt < 3) return -1;
+      cnt -= 3;
     }
   }
 
