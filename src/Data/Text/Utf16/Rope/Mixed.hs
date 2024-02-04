@@ -127,10 +127,14 @@ metrics = \case
 linesMetrics :: Char.TextLines -> Metrics
 linesMetrics tl = Metrics
   { _metricsNewlines = TL.newlines tl
-  , _metricsCharLen = Char.length tl
-  , _metricsUtf8Len = Utf8.length tl
-  , _metricsUtf16Len = Utf16.length tl
+  , _metricsCharLen = charLen
+  , _metricsUtf8Len = utf8Len
+  , _metricsUtf16Len = if charLen == utf8Len then charLen else Utf16.length tl
   }
+  where
+    charLen = Char.length tl
+    utf8Len = Utf8.length tl
+
 
 #ifdef DEBUG
 deriving instance Show Rope
@@ -385,11 +389,12 @@ charSplitAt !len = \case
       let i = len - ll
       case Char.splitAt i c of
         (before, after) -> do
+          let utf8Len = Utf8.length before
           let beforeMetrics = Metrics
                 { _metricsNewlines = TL.newlines before
                 , _metricsCharLen = i
-                , _metricsUtf8Len = Utf8.length before
-                , _metricsUtf16Len = Utf16.length before
+                , _metricsUtf8Len = utf8Len
+                , _metricsUtf16Len = if i == utf8Len then i else Utf16.length before
                 }
           let afterMetrics = subMetrics cm beforeMetrics
           (snoc l before beforeMetrics, cons after afterMetrics r)
@@ -416,11 +421,12 @@ utf8SplitAt !len = \case
       case Utf8.splitAt (len - ll) c of
         Nothing -> Nothing
         Just (before, after) -> do
+          let charLen = Char.length before
           let beforeMetrics = Metrics
                 { _metricsNewlines = TL.newlines before
-                , _metricsCharLen = Char.length before
+                , _metricsCharLen = charLen
                 , _metricsUtf8Len = i
-                , _metricsUtf16Len = Utf16.length before
+                , _metricsUtf16Len = if i == charLen then i else Utf16.length before
                 }
           let afterMetrics = subMetrics cm beforeMetrics
           Just (snoc l before beforeMetrics, cons after afterMetrics r)
