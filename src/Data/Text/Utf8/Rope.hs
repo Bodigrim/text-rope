@@ -204,14 +204,18 @@ fromTextLines tl
   | TL.null tl = Empty
   | otherwise = Node Empty tl Empty (linesMetrics tl)
 
+-- | Create a 'Node', defragmenting it if necessary. The 'Metrics' argument is
+-- the computed metrics of the 'TL.TextLines' argument.
 node :: HasCallStack => Rope -> TL.TextLines -> Metrics -> Rope -> Rope
 node l c cm r = defragment l c r (metrics l <> cm <> metrics r)
 
+-- | Append a 'TL.TextLines' with the given 'Metrics' to a 'Rope'.
 snoc :: Rope -> TL.TextLines -> Metrics -> Rope
 snoc tr tl tlm
   | TL.null tl = tr
   | otherwise = node tr tl tlm Empty
 
+-- | Prepend a 'TL.TextLines' with the given 'Metrics' to a 'Rope'.
 cons :: TL.TextLines -> Metrics -> Rope -> Rope
 cons tl tlm tr
   | TL.null tl = tr
