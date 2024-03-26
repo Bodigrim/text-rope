@@ -97,6 +97,7 @@ instance Ord Rope where
 instance Semigroup Metrics where
   Metrics nls1 c1 <> Metrics nls2 c2 =
     Metrics (nls1 + nls2) (c1 + c2)
+  {-# INLINE (<>) #-}
 
 instance Monoid Metrics where
   mempty = Metrics 0 0
