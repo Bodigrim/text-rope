@@ -4,14 +4,14 @@ cabal-version: >=1.10
 build-type: Simple
 license: BSD3
 license-file: LICENSE
-copyright: 2021-2022 Andrew Lelechenko
+copyright: 2021-2022 Andrew Lelechenko, 2024 Olle Fredriksson
 maintainer: Andrew Lelechenko <andrew.lelechenko@gmail.com>
 homepage: https://github.com/Bodigrim/text-rope
 category: Text
 synopsis: Text lines and ropes
 description:
   A wrapper around `Text` for fast line/column navigation and logarithmic concatenation.
-author: Andrew Lelechenko <andrew.lelechenko@gmail.com>
+author: Andrew Lelechenko <andrew.lelechenko@gmail.com>, Olle Fredriksson <fredriksson.olle@gmail.com>
 extra-source-files:
   changelog.md
   README.md
