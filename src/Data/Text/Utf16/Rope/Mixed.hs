@@ -76,11 +76,11 @@ import GHC.Stack (HasCallStack)
 import Text.Show (show)
 #endif
 
--- | Rope of 'Text' chunks with logarithmic concatenation.
--- This rope offers two interfaces: one based on code points
--- and another one based on UTF-16 code units. This comes with a price
--- of double bookkeeping and is less performant than "Data.Text.Rope"
--- or "Data.Text.Utf16.Rope".
+-- | Rope of 'Text' chunks with logarithmic concatenation. This rope offers
+-- three interfaces: one based on code points, one based on UTF-16 code units,
+-- and one based on UTF-8 code units. This comes with a price of more
+-- bookkeeping and is less performant than "Data.Text.Rope",
+-- "Data.Text.Utf8.Rope", or "Data.Text.Utf16.Rope".
 data Rope
   = Empty
   | Node
