@@ -38,6 +38,11 @@ module Data.Text.Utf16.Rope.Mixed
   , utf16SplitAt
   , utf16LengthAsPosition
   , utf16SplitAtPosition
+  -- * UTF-8 code units
+  , utf8Length
+  , utf8SplitAt
+  , utf8LengthAsPosition
+  , utf8SplitAtPosition
   ) where
 
 import Prelude ((-), (+), seq)
@@ -48,7 +53,7 @@ import Data.Eq (Eq, (==))
 import Data.Function ((.), ($), on)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (Monoid(..))
-import Data.Ord (Ord, compare, (<), (<=), Ordering(..))
+import Data.Ord (Ord, compare, (<), (<=))
 import Data.Semigroup (Semigroup(..))
 import Data.String (IsString(..))
 import Data.Text (Text)
@@ -56,8 +61,9 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TextLazy
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lines.Internal (TextLines)
-import qualified Data.Text.Lines.Internal as TL (null, fromText, toText, lines, splitAtLine)
+import qualified Data.Text.Lines.Internal as TL (null, fromText, toText, lines, splitAtLine, newlines)
 import qualified Data.Text.Lines as Char
+import qualified Data.Text.Utf8.Lines as Utf8
 import qualified Data.Text.Utf16.Lines as Utf16
 import Data.Word (Word)
 import Text.Show (Show)
@@ -70,33 +76,66 @@ import GHC.Stack (HasCallStack)
 import Text.Show (show)
 #endif
 
--- | Rope of 'Text' chunks with logarithmic concatenation.
--- This rope offers two interfaces: one based on code points
--- and another one based on UTF-16 code units. This comes with a price
--- of double bookkeeping and is less performant than "Data.Text.Rope"
--- or "Data.Text.Utf16.Rope".
+-- | Rope of 'Text' chunks with logarithmic concatenation. This rope offers
+-- three interfaces: one based on code points, one based on UTF-16 code units,
+-- and one based on UTF-8 code units. This comes with a price of more
+-- bookkeeping and is less performant than "Data.Text.Rope",
+-- "Data.Text.Utf8.Rope", or "Data.Text.Utf16.Rope".
 data Rope
   = Empty
   | Node
-    { _ropeLeft          :: !Rope
-    , _ropeMiddle        :: !TextLines
-    , _ropeRight         :: !Rope
-    , _ropeCharLen       :: !Word
-    , _ropeCharLenAsPos  :: !Char.Position
-    , _ropeUtf16Len      :: !Word
-    , _ropeUtf16LenAsPos :: !Utf16.Position
+    { _ropeLeft    :: !Rope
+    , _ropeMiddle  :: !TextLines
+    , _ropeRight   :: !Rope
+    , _ropeMetrics :: {-# UNPACK #-} !Metrics
     }
+
+data Metrics = Metrics
+  { _metricsNewlines :: !Word
+  , _metricsCharLen  :: !Word
+  , _metricsUtf8Len :: !Word
+  , _metricsUtf16Len :: !Word
+  }
 
 instance NFData Rope where
   rnf Empty = ()
   -- No need to deepseq strict fields, for which WHNF = NF
-  rnf (Node l _ r _ _ _ _) = rnf l `seq` rnf r
+  rnf (Node l _ r _) = rnf l `seq` rnf r
 
 instance Eq Rope where
   (==) = (==) `on` toLazyText
 
 instance Ord Rope where
   compare = compare `on` toLazyText
+
+instance Semigroup Metrics where
+  Metrics nls1 c1 u1 u1' <> Metrics nls2 c2 u2 u2' =
+    Metrics (nls1 + nls2) (c1 + c2) (u1 + u2) (u1' + u2')
+  {-# INLINE (<>) #-}
+
+instance Monoid Metrics where
+  mempty = Metrics 0 0 0 0
+
+subMetrics :: Metrics -> Metrics -> Metrics
+subMetrics (Metrics nls1 c1 u1 u1') (Metrics nls2 c2 u2 u2') =
+  Metrics (nls1 - nls2) (c1 - c2) (u1 - u2) (u1' - u2')
+
+metrics :: Rope -> Metrics
+metrics = \case
+  Empty -> mempty
+  Node _ _ _ m -> m
+
+linesMetrics :: Char.TextLines -> Metrics
+linesMetrics tl = Metrics
+  { _metricsNewlines = TL.newlines tl
+  , _metricsCharLen = charLen
+  , _metricsUtf8Len = utf8Len
+  , _metricsUtf16Len = if charLen == utf8Len then charLen else Utf16.length tl
+  }
+  where
+    charLen = Char.length tl
+    utf8Len = Utf8.length tl
+
 
 #ifdef DEBUG
 deriving instance Show Rope
@@ -121,9 +160,16 @@ null = \case
 -- 3
 --
 charLength :: Rope -> Word
-charLength = \case
-  Empty -> 0
-  Node _ _ _ w _ _ _ -> w
+charLength = _metricsCharLen . metrics
+
+-- | Length in UTF-8 code units aka bytes, O(1).
+--
+-- >>> :set -XOverloadedStrings
+-- >>> utf8Length "fя𐀀"
+-- 4
+--
+utf8Length :: Rope -> Word
+utf8Length = _metricsUtf8Len . metrics
 
 -- | Length in UTF-16 code units, O(1).
 --
@@ -132,11 +178,27 @@ charLength = \case
 -- 4
 --
 utf16Length :: Rope -> Word
-utf16Length = \case
-  Empty -> 0
-  Node _ _ _ _ _ w _ -> w
+utf16Length = _metricsUtf16Len . metrics
 
--- | Measure text length as an amount of lines and columns, O(1).
+-- | The number of newline characters, O(1).
+--
+-- >>> :set -XOverloadedStrings
+-- >>> newlines ""
+-- 0
+-- >>> newlines "foo"
+-- 0
+-- >>> newlines "foo\n"
+-- 1
+-- >>> newlines "foo\n\n"
+-- 2
+-- >>> newlines "foo\nbar"
+-- 1
+--
+newlines :: Rope -> Word
+newlines = _metricsNewlines . metrics
+
+-- | Measure text length as an amount of lines and columns.
+-- Time is linear in the length of the last line.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> charLengthAsPosition "f𐀀"
@@ -147,11 +209,24 @@ utf16Length = \case
 -- Position {posLine = 2, posColumn = 0}
 --
 charLengthAsPosition :: Rope -> Char.Position
-charLengthAsPosition = \case
-  Empty -> mempty
-  Node _ _ _ _ p _ _ -> p
+charLengthAsPosition rp =
+  Char.Position nls (charLength line)
+  where
+    nls = newlines rp
+    (_, line) = splitAtLine nls rp
 
--- | Measure text length as an amount of lines and columns, O(1).
+-- | Measure text length as an amount of lines and columns.
+-- Time is linear in the length of the last line.
+--
+utf8LengthAsPosition :: Rope -> Utf8.Position
+utf8LengthAsPosition rp =
+  Utf8.Position nls (utf8Length line)
+  where
+    nls = newlines rp
+    (_, line) = splitAtLine nls rp
+
+-- | Measure text length as an amount of lines and columns.
+-- Time is linear in the length of the last line.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> utf16LengthAsPosition "f𐀀"
@@ -162,61 +237,59 @@ charLengthAsPosition = \case
 -- Position {posLine = 2, posColumn = 0}
 --
 utf16LengthAsPosition :: Rope -> Utf16.Position
-utf16LengthAsPosition = \case
-  Empty -> mempty
-  Node _ _ _ _ _ _ p -> p
+utf16LengthAsPosition rp =
+  Utf16.Position nls (utf16Length line)
+  where
+    nls = newlines rp
+    (_, line) = splitAtLine nls rp
 
 instance Semigroup Rope where
   Empty <> t = t
   t <> Empty = t
-  Node l1 c1 r1 u1 p1 u1' p1' <> Node l2 c2 r2 u2 p2 u2' p2' = defragment
+  Node l1 c1 r1 m1 <> Node l2 c2 r2 m2 = defragment
     l1
     c1
-    (Node (r1 <> l2) c2 r2 (charLength r1 + u2) (charLengthAsPosition r1 <> p2) (utf16Length r1 + u2') (utf16LengthAsPosition r1 <> p2'))
-    (u1 + u2)
-    (p1 <> p2)
-    (u1' + u2')
-    (p1' <> p2')
+    (Node (r1 <> l2) c2 r2 (metrics r1 <> m2))
+    (m1 <> m2)
 
 instance Monoid Rope where
   mempty = Empty
   mappend = (<>)
 
-defragment :: HasCallStack => Rope -> TextLines -> Rope -> Word -> Char.Position -> Word -> Utf16.Position -> Rope
-defragment !l !c !r !u !p !u' !p'
+defragment :: HasCallStack => Rope -> TextLines -> Rope -> Metrics -> Rope
+defragment !l !c !r !m
 #ifdef DEBUG
   | TL.null c = error "Data.Text.Lines: violated internal invariant"
 #endif
-  | u < DEFRAGMENTATION_THRESHOLD
-  = Node Empty (toTextLines rp) Empty u p u' p'
+  | _metricsUtf16Len m < DEFRAGMENTATION_THRESHOLD
+  = Node Empty (toTextLines rp) Empty m
   | otherwise
   = rp
   where
-    rp = Node l c r u p u' p'
+    rp = Node l c r m
 
 -- | Create from 'TextLines', linear time.
 fromTextLines :: TextLines -> Rope
 fromTextLines tl
   | TL.null tl = Empty
-  | otherwise = Node Empty tl Empty (Char.length tl) (Char.lengthAsPosition tl) (Utf16.length tl) (Utf16.lengthAsPosition tl)
+  | otherwise = Node Empty tl Empty (linesMetrics tl)
 
-node :: HasCallStack => Rope -> TextLines -> Rope -> Rope
-node l c r = defragment l c r totalLength totalLengthAsPosition totalLength' totalLengthAsPosition'
-  where
-    totalLength = charLength l + Char.length c + charLength r
-    totalLengthAsPosition = charLengthAsPosition l <> Char.lengthAsPosition c <> charLengthAsPosition r
-    totalLength' = utf16Length l + Utf16.length c + utf16Length r
-    totalLengthAsPosition' = utf16LengthAsPosition l <> Utf16.lengthAsPosition c <> utf16LengthAsPosition r
+-- | Create a 'Node', defragmenting it if necessary. The 'Metrics' argument is
+-- the computed metrics of the 'TL.TextLines' argument.
+node :: HasCallStack => Rope -> TextLines -> Metrics -> Rope -> Rope
+node l c cm r = defragment l c r (metrics l <> cm <> metrics r)
 
-(|>) :: Rope -> TextLines -> Rope
-tr |> tl
+-- | Append a 'TL.TextLines' with the given 'Metrics' to a 'Rope'.
+snoc :: Rope -> TextLines -> Metrics -> Rope
+snoc tr tl tlm
   | TL.null tl = tr
-  | otherwise = node tr tl Empty
+  | otherwise = node tr tl tlm Empty
 
-(<|) :: TextLines -> Rope -> Rope
-tl <| tr
+-- | Prepend a 'TL.TextLines' with the given 'Metrics' to a 'Rope'.
+cons :: TextLines -> Metrics -> Rope -> Rope
+cons tl tlm tr
   | TL.null tl = tr
-  | otherwise = node Empty tl tr
+  | otherwise = node Empty tl tlm tr
 
 -- | Create from 'Text', linear time.
 fromText :: Text -> Rope
@@ -227,7 +300,7 @@ foldMapRope f = go
   where
     go = \case
       Empty -> mempty
-      Node l c r _ _ _ _ -> go l `mappend` f c `mappend` go r
+      Node l c r _ -> go l `mappend` f c `mappend` go r
 
 data Lines = Lines ![Text] !Bool
 
@@ -268,8 +341,8 @@ lastChar :: Rope -> Maybe Char
 lastChar = \case
   Empty -> Nothing
   -- This assumes that there are no empty chunks:
-  Node _ c Empty _ _ _ _ -> Just $ T.last $ TL.toText c
-  Node _ _ r _ _ _ _ -> lastChar r
+  Node _ c Empty _ -> Just $ T.last $ TL.toText c
+  Node _ _ r _ -> lastChar r
 
 -- | Equivalent to 'Data.List.length' . 'lines', but in logarithmic time.
 --
@@ -314,16 +387,61 @@ toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText 
 charSplitAt :: HasCallStack => Word -> Rope -> (Rope, Rope)
 charSplitAt !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r m
     | len <= ll -> case charSplitAt len l of
-        (before, after) -> (before, node after c r)
-    | len <= llc -> case Char.splitAt (len - ll) c of
-      (before, after) -> (l |> before, after <| r)
+        (before, after) -> (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case Char.splitAt i c of
+        (before, after) -> do
+          let utf8Len = Utf8.length before
+          let beforeMetrics = Metrics
+                { _metricsNewlines = TL.newlines before
+                , _metricsCharLen = i
+                , _metricsUtf8Len = utf8Len
+                , _metricsUtf16Len = if i == utf8Len then i else Utf16.length before
+                }
+          let afterMetrics = subMetrics cm beforeMetrics
+          (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case charSplitAt (len - llc) r of
-      (before, after) -> (node l c before, after)
+      (before, after) -> (node l c cm before, after)
     where
       ll = charLength l
-      llc = ll + Char.length c
+      llc = ll + _metricsCharLen cm
+      cm = subMetrics m (metrics l <> metrics r)
+
+-- | Split at given UTF-8 code unit aka byte.
+-- If requested number of code units splits a code point in half, return 'Nothing'.
+-- Takes linear time.
+--
+utf8SplitAt :: HasCallStack => Word -> Rope -> Maybe (Rope, Rope)
+utf8SplitAt !len = \case
+  Empty -> Just (Empty, Empty)
+  Node l c r m
+    | len <= ll -> case utf8SplitAt len l of
+        Nothing -> Nothing
+        Just (before, after) -> Just (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case Utf8.splitAt (len - ll) c of
+        Nothing -> Nothing
+        Just (before, after) -> do
+          let charLen = Char.length before
+          let beforeMetrics = Metrics
+                { _metricsNewlines = TL.newlines before
+                , _metricsCharLen = charLen
+                , _metricsUtf8Len = i
+                , _metricsUtf16Len = if i == charLen then i else Utf16.length before
+                }
+          let afterMetrics = subMetrics cm beforeMetrics
+          Just (snoc l before beforeMetrics, cons after afterMetrics r)
+    | otherwise -> case utf8SplitAt (len - llc) r of
+      Nothing -> Nothing
+      Just (before, after) -> Just (node l c cm before, after)
+    where
+      ll = utf8Length l
+      llc = ll + _metricsUtf8Len cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Split at given UTF-16 code unit.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
@@ -336,19 +454,30 @@ charSplitAt !len = \case
 utf16SplitAt :: HasCallStack => Word -> Rope -> Maybe (Rope, Rope)
 utf16SplitAt !len = \case
   Empty -> Just (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r m
     | len <= ll -> case utf16SplitAt len l of
         Nothing -> Nothing
-        Just (before, after) -> Just (before, node after c r)
-    | len <= llc -> case Utf16.splitAt (len - ll) c of
-      Nothing -> Nothing
-      Just (before, after) -> Just (l |> before, after <| r)
+        Just (before, after) -> Just (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case Utf16.splitAt (len - ll) c of
+        Nothing -> Nothing
+        Just (before, after) -> do
+          let beforeMetrics = Metrics
+                { _metricsNewlines = TL.newlines before
+                , _metricsCharLen = Char.length before
+                , _metricsUtf8Len = Utf8.length before
+                , _metricsUtf16Len = i
+                }
+          let afterMetrics = subMetrics cm beforeMetrics
+          Just (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case utf16SplitAt (len - llc) r of
       Nothing -> Nothing
-      Just (before, after) -> Just (node l c before, after)
+      Just (before, after) -> Just (node l c cm before, after)
     where
       ll = utf16Length l
-      llc = ll + Utf16.length c
+      llc = ll + _metricsUtf16Len cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Split at given line, logarithmic time.
 --
@@ -359,49 +488,23 @@ utf16SplitAt !len = \case
 splitAtLine :: HasCallStack => Word -> Rope -> (Rope, Rope)
 splitAtLine !len = \case
   Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
+  Node l c r m
     | len <= ll -> case splitAtLine len l of
-      (before, after) -> (before, node after c r)
-    | len <= llc -> case TL.splitAtLine (len - ll) c of
-      (before, after) -> (l |> before, after <| r)
+      (before, after) -> (before, node after c cm r)
+    | len <= llc -> do
+      let i = len - ll
+      case TL.splitAtLine i c of
+        (before, after) -> do
+          let beforeMetrics = linesMetrics before
+          let afterMetrics = subMetrics cm beforeMetrics
+          (snoc l before beforeMetrics, cons after afterMetrics r)
     | otherwise -> case splitAtLine (len - llc) r of
-      (before, after) -> (node l c before, after)
+      (before, after) -> (node l c cm before, after)
     where
       -- posLine is the same both in Char.lengthAsPosition and Utf16.lengthAsPosition
-      ll = Char.posLine (charLengthAsPosition l)
-      llc = ll + Char.posLine (Char.lengthAsPosition c)
-
-charSubOnRope :: Rope -> Char.Position -> Char.Position -> Char.Position
-charSubOnRope rp (Char.Position xl xc) (Char.Position yl yc) = case xl `compare` yl of
-  GT -> Char.Position (xl - yl) xc
-  EQ -> Char.Position 0 (xc - yc)
-  LT -> Char.Position 0 (xc - charLength rp')
-  where
-    (_, rp') = splitAtLine xl rp
-
-utf16SubOnRope :: Rope -> Utf16.Position -> Utf16.Position -> Utf16.Position
-utf16SubOnRope rp (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `compare` yl of
-  GT -> Utf16.Position (xl - yl) xc
-  EQ -> Utf16.Position 0 (xc - yc)
-  LT -> Utf16.Position 0 (xc - utf16Length rp')
-  where
-    (_, rp') = splitAtLine xl rp
-
-charSubOnLines :: Char.TextLines -> Char.Position -> Char.Position -> Char.Position
-charSubOnLines tl (Char.Position xl xc) (Char.Position yl yc) = case xl `compare` yl of
-  GT -> Char.Position (xl - yl) xc
-  EQ -> Char.Position 0 (xc - yc)
-  LT -> Char.Position 0 (xc - Char.length tl')
-  where
-    (_, tl') = Char.splitAtLine xl tl
-
-utf16SubOnLines :: Utf16.TextLines -> Utf16.Position -> Utf16.Position -> Utf16.Position
-utf16SubOnLines tl (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `compare` yl of
-  GT -> Utf16.Position (xl - yl) xc
-  EQ -> Utf16.Position 0 (xc - yc)
-  LT -> Utf16.Position 0 (xc - Utf16.length tl')
-  where
-    (_, tl') = Utf16.splitAtLine xl tl
+      ll = newlines l
+      llc = ll + _metricsNewlines cm
+      cm = subMetrics m (metrics l <> metrics r)
 
 -- | Combination of 'splitAtLine' and subsequent 'charSplitAt'.
 -- Time is linear in 'Char.posColumn' and logarithmic in 'Char.posLine'.
@@ -421,28 +524,19 @@ utf16SubOnLines tl (Utf16.Position xl xc) (Utf16.Position yl yc) = case xl `comp
 -- ("f\n𐀀я","")
 --
 charSplitAtPosition :: HasCallStack => Char.Position -> Rope -> (Rope, Rope)
-charSplitAtPosition (Char.Position 0 0) = (mempty,)
-charSplitAtPosition !len = \case
-  Empty -> (Empty, Empty)
-  Node l c r _ _ _ _
-    | len <= ll -> case charSplitAtPosition len l of
-      (before, after)
-        | null after -> case charSplitAtPosition len' (c <| r) of
-          (r', r'') -> (l <> r', r'')
-        | otherwise -> (before, node after c r)
-    | len <= llc -> case Char.splitAtPosition len' c of
-      (before, after)
-        | TL.null after -> case charSplitAtPosition len'' r of
-          (r', r'') -> ((l |> c) <> r', r'')
-        | otherwise -> (l |> before, after <| r)
-    | otherwise -> case charSplitAtPosition len'' r of
-      (before, after) -> (node l c before, after)
-    where
-      ll = charLengthAsPosition l
-      lc = Char.lengthAsPosition c
-      llc = ll <> lc
-      len' = charSubOnRope l len ll
-      len'' = charSubOnLines c len' lc
+charSplitAtPosition (Char.Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
+  where
+    (beforeLine, afterLine) = splitAtLine l rp
+    (beforeColumn, afterColumn) = charSplitAt c afterLine
+
+-- | Combination of 'splitAtLine' and subsequent 'utf8SplitAt'.
+-- Time is linear in 'Utf8.posColumn' and logarithmic in 'Utf8.posLine'.
+--
+utf8SplitAtPosition :: HasCallStack => Utf8.Position -> Rope -> Maybe (Rope, Rope)
+utf8SplitAtPosition (Utf8.Position l c) rp = do
+  let (beforeLine, afterLine) = splitAtLine l rp
+  (beforeColumn, afterColumn) <- utf8SplitAt c afterLine
+  Just (beforeLine <> beforeColumn, afterColumn)
 
 -- | Combination of 'splitAtLine' and subsequent 'utf16SplitAt'.
 -- Time is linear in 'Utf16.posColumn' and logarithmic in 'Utf16.posLine'.
@@ -462,30 +556,7 @@ charSplitAtPosition !len = \case
 -- Just ("f\n𐀀","я")
 --
 utf16SplitAtPosition :: HasCallStack => Utf16.Position -> Rope -> Maybe (Rope, Rope)
-utf16SplitAtPosition (Utf16.Position 0 0) = Just . (mempty,)
-utf16SplitAtPosition !len = \case
-  Empty -> Just (Empty, Empty)
-  Node l c r _ _ _ _
-    | len <= ll -> case utf16SplitAtPosition len l of
-      Nothing -> Nothing
-      Just (before, after)
-        | null after -> case utf16SplitAtPosition len' (c <| r) of
-          Nothing -> Nothing
-          Just (r', r'') -> Just (l <> r', r'')
-        | otherwise -> Just (before, node after c r)
-    | len <= llc -> case Utf16.splitAtPosition len' c of
-      Nothing -> Nothing
-      Just (before, after)
-        | Utf16.null after -> case utf16SplitAtPosition len'' r of
-          Nothing -> Nothing
-          Just (r', r'') -> Just ((l |> c) <> r', r'')
-        | otherwise -> Just (l |> before, after <| r)
-    | otherwise -> case utf16SplitAtPosition len'' r of
-      Nothing -> Nothing
-      Just (before, after) -> Just (node l c before, after)
-    where
-      ll = utf16LengthAsPosition l
-      lc = Utf16.lengthAsPosition c
-      llc = ll <> lc
-      len' = utf16SubOnRope l len ll
-      len'' = utf16SubOnLines c len' lc
+utf16SplitAtPosition (Utf16.Position l c) rp = do
+  let (beforeLine, afterLine) = splitAtLine l rp
+  (beforeColumn, afterColumn) <- utf16SplitAt c afterLine
+  Just (beforeLine <> beforeColumn, afterColumn)

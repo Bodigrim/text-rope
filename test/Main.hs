@@ -10,6 +10,8 @@ module Main
 import qualified CharLines
 import qualified CharRope
 import qualified MixedRope
+import qualified Utf8Lines
+import qualified Utf8Rope
 import qualified Utf16Lines
 import qualified Utf16Rope
 
@@ -22,6 +24,8 @@ main :: IO ()
 main = defaultMain $ testGroup "All"
   [ CharLines.testSuite
   , CharRope.testSuite
+  , Utf8Lines.testSuite
+  , Utf8Rope.testSuite
   , Utf16Lines.testSuite
   , Utf16Rope.testSuite
   , MixedRope.testSuite
