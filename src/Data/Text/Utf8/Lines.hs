@@ -65,7 +65,7 @@ foreign import ccall unsafe "_hs_text_lines_length_utf16_as_utf8" lengthUtf16AsU
   :: ByteArray# -> CSize -> CSize -> IO CSsize
 #endif
 
--- | Length in UTF-8 code units.
+-- | Length in UTF-8 code units aka bytes.
 -- Takes linear time.
 --
 -- >>> :set -XOverloadedStrings
@@ -80,7 +80,7 @@ length = lengthTextUtf8 . I.toText
 -- | Represent a position in a text.
 data Position = Position
   { posLine   :: !Word -- ^ Line.
-  , posColumn :: !Word -- ^ Column in UTF-8 code units.
+  , posColumn :: !Word -- ^ Column in UTF-8 code units aka bytes.
   } deriving (Eq, Ord, Show)
 
 instance NFData Position where
@@ -177,7 +177,7 @@ splitAtPosition (Position line column) (I.TextLines (Text arr off len) nls) =
       | otherwise = nls U.! (I.wordToInt line - 1) + 1
     tx = Text arr nl (arrLen - nl)
 
--- | Split at given UTF-8 code unit.
+-- | Split at given UTF-8 code unit aka byte.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
 -- Takes linear time.
 --
