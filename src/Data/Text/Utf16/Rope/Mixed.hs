@@ -162,7 +162,7 @@ null = \case
 charLength :: Rope -> Word
 charLength = _metricsCharLen . metrics
 
--- | Length in UTF-8 code units, O(1).
+-- | Length in UTF-8 code units aka bytes, O(1).
 --
 -- >>> :set -XOverloadedStrings
 -- >>> utf8Length "fя𐀀"
@@ -410,7 +410,7 @@ charSplitAt !len = \case
       llc = ll + _metricsCharLen cm
       cm = subMetrics m (metrics l <> metrics r)
 
--- | Split at given UTF-8 code unit.
+-- | Split at given UTF-8 code unit aka byte.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
 -- Takes linear time.
 --

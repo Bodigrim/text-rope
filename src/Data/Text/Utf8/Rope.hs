@@ -128,7 +128,7 @@ null = \case
   Empty -> True
   Node{} -> False
 
--- | Length in UTF-8 code units, O(1).
+-- | Length in UTF-8 code units aka bytes, O(1).
 --
 -- >>> :set -XOverloadedStrings
 -- >>> length "fя𐀀"
@@ -307,7 +307,7 @@ toLazyText = foldMapRope (TextLazy.fromStrict . TL.toText)
 toText :: Rope -> Text
 toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText . TL.toText)
 
--- | Split at given UTF-8 code unit.
+-- | Split at given UTF-8 code unit aka byte.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
 -- Takes linear time.
 --
