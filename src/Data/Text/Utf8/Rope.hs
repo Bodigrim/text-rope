@@ -113,6 +113,7 @@ linesMetrics tl = Metrics
   }
 
 #ifdef DEBUG
+deriving instance Show Metrics
 deriving instance Show Rope
 #else
 instance Show Rope where
