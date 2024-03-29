@@ -101,6 +101,7 @@ instance Semigroup Metrics where
 
 instance Monoid Metrics where
   mempty = Metrics 0 0
+  mappend = (<>)
 
 subMetrics :: Metrics -> Metrics -> Metrics
 subMetrics (Metrics nls1 c1) (Metrics nls2 c2) =
