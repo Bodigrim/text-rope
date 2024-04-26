@@ -15,6 +15,7 @@ module Data.Text.Lines.Internal
   -- * Lines
   , lines
   , lengthInLines
+  , newlines
   , splitAtLine
   -- * Code points
   , length
@@ -193,6 +194,23 @@ lengthInLines :: TextLines -> Word
 lengthInLines (TextLines t nls) = case T.unsnoc t of
   Nothing -> 0
   Just (_, ch) -> intToWord $ U.length nls + (if ch == '\n' then 0 else 1)
+
+-- | The number of newline characters, O(1).
+--
+-- >>> :set -XOverloadedStrings
+-- >>> newlines ""
+-- 0
+-- >>> newlines "foo"
+-- 0
+-- >>> newlines "foo\n"
+-- 1
+-- >>> newlines "foo\n\n"
+-- 2
+-- >>> newlines "foo\nbar"
+-- 1
+--
+newlines :: TextLines -> Word
+newlines (TextLines _ nls) = intToWord $ U.length nls
 
 -- | Split into lines by @\\n@, similar to @Data.Text.@'Data.Text.lines'.
 -- Each line is produced in O(1).

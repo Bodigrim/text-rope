@@ -13,8 +13,9 @@ import Data.Function (($))
 import Data.Maybe (Maybe(..), isJust)
 import Data.Semigroup ((<>))
 import qualified Data.Text.Lines as Char
+import qualified Data.Text.Utf8.Lines as Utf8
 import qualified Data.Text.Utf16.Lines as Utf16
-import qualified Data.Text.Utf16.Rope.Mixed as Mixed
+import qualified Data.Text.Mixed.Rope as Mixed
 import Test.Tasty (testGroup, TestTree)
 import Test.Tasty.QuickCheck (testProperty, (===), property, (.&&.), counterexample)
 
@@ -27,6 +28,8 @@ testSuite = testGroup "Utf16 Mixed"
 
   , testProperty "charLength" $
     \x -> Mixed.charLength x === Char.length (Mixed.toTextLines x)
+  , testProperty "utf8Length" $
+    \x -> Mixed.utf8Length x === Utf8.length (Mixed.toTextLines x)
   , testProperty "utf16Length" $
     \x -> Mixed.utf16Length x === Utf16.length (Mixed.toTextLines x)
 
@@ -47,6 +50,16 @@ testSuite = testGroup "Utf16 Mixed"
     \i x -> case (Mixed.charSplitAt i x, Char.splitAt i (Char.fromText $ Mixed.toText x)) of
       ((y, z), (y', z')) -> Char.fromText (Mixed.toText y) === y' .&&. Char.fromText (Mixed.toText z) === z'
 
+  , testProperty "utf8SplitAt 1" $
+    \i x -> case Mixed.utf8SplitAt i x of
+      Nothing -> property True
+      Just (y, z) -> x === y <> z
+  , testProperty "utf8SplitAt 2" $
+    \i x -> case (Mixed.utf8SplitAt i x, Utf8.splitAt i (Utf8.fromText $ Mixed.toText x)) of
+      (Nothing, Nothing) -> property True
+      (Nothing, Just{}) -> counterexample "can split TextLines, but not Mixed" False
+      (Just{}, Nothing) -> counterexample "can split Mixed, but not TextLines" False
+      (Just (y, z), Just (y', z')) -> Utf8.fromText (Mixed.toText y) === y' .&&. Utf8.fromText (Mixed.toText z) === z'
   , testProperty "utf16SplitAt 1" $
     \i x -> case Mixed.utf16SplitAt i x of
       Nothing -> property True
@@ -69,6 +82,16 @@ testSuite = testGroup "Utf16 Mixed"
     \i x -> case (Mixed.charSplitAtPosition i x, Char.splitAtPosition i (Char.fromText $ Mixed.toText x)) of
       ((y, z), (y', z')) -> Char.fromText (Mixed.toText y) === y' .&&. Char.fromText (Mixed.toText z) === z'
 
+  , testProperty "utf8SplitAtPosition 1" $
+    \i x -> case Mixed.utf8SplitAtPosition i x of
+      Nothing -> property True
+      Just (y, z) -> x === y <> z
+  , testProperty "utf8SplitAtPosition 2" $
+    \i x -> case (Mixed.utf8SplitAtPosition i x, Utf8.splitAtPosition i (Utf8.fromText $ Mixed.toText x)) of
+      (Nothing, Nothing) -> property True
+      (Nothing, Just{}) -> counterexample "can split TextLines, but not Mixed" False
+      (Just{}, Nothing) -> counterexample "can split Mixed, but not TextLines" False
+      (Just (y, z), Just (y', z')) -> Utf8.fromText (Mixed.toText y) === y' .&&. Utf8.fromText (Mixed.toText z) === z'
   , testProperty "utf16SplitAtPosition 1" $
     \i x -> case Mixed.utf16SplitAtPosition i x of
       Nothing -> property True

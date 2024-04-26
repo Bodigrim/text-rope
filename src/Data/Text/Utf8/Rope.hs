@@ -1,8 +1,3 @@
--- |
--- Copyright:   (c) 2021-2022 Andrew Lelechenko
--- Licence:     BSD3
--- Maintainer:  Andrew Lelechenko <andrew.lelechenko@gmail.com>
-
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -17,7 +12,7 @@
 #define DEFRAGMENTATION_THRESHOLD 4096
 #endif
 
-module Data.Text.Utf16.Rope
+module Data.Text.Utf8.Rope
   ( Rope
   , fromText
   , fromTextLines
@@ -28,7 +23,7 @@ module Data.Text.Utf16.Rope
   , lines
   , lengthInLines
   , splitAtLine
-  -- * UTF-16 code units
+  -- * UTF-8 code units
   , length
   , splitAt
   , Position(..)
@@ -51,8 +46,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TextLazy
 import qualified Data.Text.Lazy.Builder as Builder
-import Data.Text.Utf16.Lines (Position(..))
-import qualified Data.Text.Utf16.Lines as TL
+import Data.Text.Utf8.Lines (Position(..))
+import qualified Data.Text.Utf8.Lines as TL
 import qualified Data.Text.Lines.Internal as TL (newlines)
 import Data.Word (Word)
 import Text.Show (Show)
@@ -66,7 +61,7 @@ import Text.Show (show)
 #endif
 
 -- | Rope of 'Text' chunks with logarithmic concatenation.
--- This rope offers an interface, based on UTF-16 code units.
+-- This rope offers an interface, based on UTF-8 code units.
 -- Use "Data.Text.Rope", if you need code points,
 -- or "Data.Text.Mixed.Rope", if you need both interfaces.
 data Rope
@@ -80,7 +75,7 @@ data Rope
 
 data Metrics = Metrics
   { _metricsNewlines :: !Word
-  , _metricsUtf16Len :: !Word
+  , _metricsUtf8Len  :: !Word
   }
 
 instance NFData Rope where
@@ -115,7 +110,7 @@ metrics = \case
 linesMetrics :: TL.TextLines -> Metrics
 linesMetrics tl = Metrics
   { _metricsNewlines = TL.newlines tl
-  , _metricsUtf16Len = TL.length tl
+  , _metricsUtf8Len = TL.length tl
   }
 
 #ifdef DEBUG
@@ -135,15 +130,15 @@ null = \case
   Empty -> True
   Node{} -> False
 
--- | Length in UTF-16 code units, O(1).
+-- | Length in UTF-8 code units aka bytes, O(1).
 --
 -- >>> :set -XOverloadedStrings
 -- >>> length "fя𐀀"
--- 4
+-- 7
 -- >>> Data.Text.Rope.length "fя𐀀"
 -- 3
 length :: Rope -> Word
-length = _metricsUtf16Len . metrics
+length = _metricsUtf8Len . metrics
 
 -- | The number of newline characters, O(1).
 --
@@ -167,9 +162,9 @@ newlines = _metricsNewlines . metrics
 --
 -- >>> :set -XOverloadedStrings
 -- >>> lengthAsPosition "f𐀀"
--- Position {posLine = 0, posColumn = 3}
+-- Position {posLine = 0, posColumn = 5}
 -- >>> lengthAsPosition "f\n𐀀"
--- Position {posLine = 1, posColumn = 2}
+-- Position {posLine = 1, posColumn = 4}
 -- >>> lengthAsPosition "f\n𐀀\n"
 -- Position {posLine = 2, posColumn = 0}
 --
@@ -198,7 +193,7 @@ defragment !l !c !r !m
 #ifdef DEBUG
   | TL.null c = error "Data.Text.Lines: violated internal invariant"
 #endif
-  | _metricsUtf16Len m < DEFRAGMENTATION_THRESHOLD
+  | _metricsUtf8Len m < DEFRAGMENTATION_THRESHOLD
   = Node Empty (toTextLines rp) Empty m
   | otherwise
   = rp
@@ -314,13 +309,13 @@ toLazyText = foldMapRope (TextLazy.fromStrict . TL.toText)
 toText :: Rope -> Text
 toText = TextLazy.toStrict . Builder.toLazyText . foldMapRope (Builder.fromText . TL.toText)
 
--- | Split at given UTF-16 code unit.
+-- | Split at given UTF-8 code unit aka byte.
 -- If requested number of code units splits a code point in half, return 'Nothing'.
 -- Takes linear time.
 --
 -- >>> :set -XOverloadedStrings
--- >>> map (\c -> splitAt c "fя𐀀") [0..4]
--- [Just ("","fя𐀀"),Just ("f","я𐀀"),Just ("fя","𐀀"),Nothing,Just ("fя𐀀","")]
+-- >>> map (\c -> splitAt c "fя𐀀") [0..7]
+-- [Just ("","fя𐀀"),Just ("f","я𐀀"),Nothing,Just ("fя","𐀀"),Nothing,Nothing,Nothing,Just ("fя𐀀","")]
 --
 splitAt :: HasCallStack => Word -> Rope -> Maybe (Rope, Rope)
 splitAt !len = \case
@@ -336,7 +331,7 @@ splitAt !len = \case
         Just (before, after) -> do
           let beforeMetrics = Metrics
                 { _metricsNewlines = TL.newlines before
-                , _metricsUtf16Len = i
+                , _metricsUtf8Len = i
                 }
           let afterMetrics = subMetrics cm beforeMetrics
           Just (snoc l before beforeMetrics, cons after afterMetrics r)
@@ -345,7 +340,7 @@ splitAt !len = \case
       Just (before, after) -> Just (node l c cm before, after)
     where
       ll = length l
-      llc = ll + _metricsUtf16Len cm
+      llc = ll + _metricsUtf8Len cm
       cm = subMetrics m (metrics l <> metrics r)
 
 -- | Split at given line, logarithmic time.
@@ -377,13 +372,13 @@ splitAtLine !len = \case
 -- Just ("f\n","𐀀я")
 -- >>> splitAtPosition (Position 1 1) "f\n𐀀я"
 -- Nothing
--- >>> splitAtPosition (Position 1 2) "f\n𐀀я"
+-- >>> splitAtPosition (Position 1 4) "f\n𐀀я"
 -- Just ("f\n𐀀","я")
 -- >>> splitAtPosition (Position 0 2) "f\n𐀀я"
 -- Just ("f\n","𐀀я")
 -- >>> splitAtPosition (Position 0 3) "f\n𐀀я"
 -- Nothing
--- >>> splitAtPosition (Position 0 4) "f\n𐀀я"
+-- >>> splitAtPosition (Position 0 6) "f\n𐀀я"
 -- Just ("f\n𐀀","я")
 --
 splitAtPosition :: HasCallStack => Position -> Rope -> Maybe (Rope, Rope)
