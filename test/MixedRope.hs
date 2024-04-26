@@ -15,7 +15,7 @@ import Data.Semigroup ((<>))
 import qualified Data.Text.Lines as Char
 import qualified Data.Text.Utf8.Lines as Utf8
 import qualified Data.Text.Utf16.Lines as Utf16
-import qualified Data.Text.Utf16.Rope.Mixed as Mixed
+import qualified Data.Text.Mixed.Rope as Mixed
 import Test.Tasty (testGroup, TestTree)
 import Test.Tasty.QuickCheck (testProperty, (===), property, (.&&.), counterexample)
 

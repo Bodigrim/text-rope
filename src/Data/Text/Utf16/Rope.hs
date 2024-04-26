@@ -68,7 +68,7 @@ import Text.Show (show)
 -- | Rope of 'Text' chunks with logarithmic concatenation.
 -- This rope offers an interface, based on UTF-16 code units.
 -- Use "Data.Text.Rope", if you need code points,
--- or "Data.Text.Utf16.Rope.Mixed", if you need both interfaces.
+-- or "Data.Text.Mixed.Rope", if you need both interfaces.
 data Rope
   = Empty
   | Node

@@ -39,6 +39,7 @@ library
     Data.Text.Utf8.Rope
     Data.Text.Utf16.Rope
     Data.Text.Utf16.Rope.Mixed
+    Data.Text.Mixed.Rope
   other-modules:
     Data.Text.Lines.Internal
   build-depends:

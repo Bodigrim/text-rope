@@ -32,7 +32,7 @@ import Test.Tasty.Bench (defaultMain, bgroup, bench, nf, bcompare)
 import qualified Data.Text.Rope as CharRope
 import qualified Data.Text.Utf8.Rope as Utf8Rope
 import qualified Data.Text.Utf16.Rope as Utf16Rope
-import qualified Data.Text.Utf16.Rope.Mixed as Mixed
+import qualified Data.Text.Mixed.Rope as Mixed
 #ifdef MIN_VERSION_core_text
 import qualified Core.Text.Rope as CoreText
 #endif
