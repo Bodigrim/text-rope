@@ -9,6 +9,7 @@ module Data.Text.Lines
   , toText
   , null
   -- * Lines
+  , getLine
   , lines
   , lengthInLines
   , splitAtLine

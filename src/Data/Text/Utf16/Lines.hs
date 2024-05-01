@@ -15,6 +15,7 @@ module Data.Text.Utf16.Lines
   , I.toText
   , I.null
   -- * Lines
+  , I.getLine
   , I.lines
   , I.lengthInLines
   , I.splitAtLine

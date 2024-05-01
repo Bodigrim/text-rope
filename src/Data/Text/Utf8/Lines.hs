@@ -10,6 +10,7 @@ module Data.Text.Utf8.Lines
   , I.toText
   , I.null
   -- * Lines
+  , I.getLine
   , I.lines
   , I.lengthInLines
   , I.splitAtLine

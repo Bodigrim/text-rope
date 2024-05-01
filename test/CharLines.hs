@@ -7,7 +7,7 @@ module CharLines
   ( testSuite
   ) where
 
-import Prelude (fromIntegral, maxBound, (-))
+import Prelude (fromIntegral, maxBound, zipWith, (+), (-))
 import Data.Bool ((||), not, (&&))
 import Data.Function (($))
 import qualified Data.List as L
@@ -19,7 +19,7 @@ import Data.Text.Lines
 import Data.Tuple (snd)
 import Data.Word (Word)
 import Test.Tasty (testGroup, TestTree)
-import Test.Tasty.QuickCheck (Small(..), testProperty, (===), applyFun, (.||.), (.&&.), (==>))
+import Test.Tasty.QuickCheck (Positive (..), Small(..), applyFun, conjoin, testProperty, (===), (.||.), (.&&.), (==>))
 
 import Utils ()
 
@@ -102,4 +102,13 @@ testSuite = testGroup "Char Lines"
       null z .||. length (snd (splitAtLine l y)) === c
   , testProperty "splitAtPosition 5" $
     \i -> let (y, z) = splitAtPosition i mempty in y === mempty .&&. z === mempty
+
+  , testProperty "∀ i in bounds: getLine i x == lines x !! i" $
+    \x -> let lns = lines x
+          in conjoin $ zipWith (\idx ln -> getLine idx x === ln) [0..] lns
+  , testProperty "∀ i out of bounds: getLine i x == mempty" $
+    \x (Positive offset) ->
+      let maxIdx = L.genericLength (lines x) - 1
+          outOfBoundsIdx = maxIdx + offset
+      in getLine outOfBoundsIdx x === mempty
   ]

@@ -13,6 +13,7 @@ module Data.Text.Lines.Internal
   , fromText
   , null
   -- * Lines
+  , getLine
   , lines
   , lengthInLines
   , newlines
@@ -31,7 +32,7 @@ module Data.Text.Lines.Internal
   , intToWord
   ) where
 
-import Prelude ((+), (-), (*), subtract, quot, fromIntegral, seq, error)
+import Prelude ((+), (-), (*), (||), subtract, quot, fromIntegral, seq, error)
 import Control.DeepSeq (NFData, rnf)
 import Data.Bits (toIntegralSized)
 import Data.Bool (Bool, otherwise, not)
@@ -242,6 +243,34 @@ lines (TextLines (Text arr off len) nls) = go off (U.toList nls)
 --
 splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine k = splitAtPosition (Position k 0)
+
+-- | Get line with given index, O(1).
+-- The resulting Text does not contain newlines.
+-- Returns "" if the line index is out of bounds
+--
+-- >>> :set -XOverloadedStrings
+-- >>> map (\l -> getLine l "fя𐀀\n☺bar\n\n") [0..3]
+-- ["fя𐀀","☺bar","",""]
+getLine :: Word -> TextLines -> Text
+getLine line (TextLines t@(Text arr off len) nls)
+  | line < 0 || nlCount < line = mempty
+  | line == 0 = -- before first (if any) newline
+    if nlCount == 0 then
+      t
+    else
+      let newLen = nls U.! lineIdx - off
+      in Text arr off newLen
+  | line == nlCount = -- after last newline
+      let startOff = nls U.! (lineIdx - 1) + 1
+          newLen = len - startOff + off
+      in Text arr startOff newLen
+  | otherwise = -- between two newlines
+      let startOff = nls U.! (lineIdx - 1) + 1
+          endOff = nls U.! lineIdx
+      in Text arr startOff (endOff - startOff)
+  where
+    nlCount = intToWord (U.length nls)
+    lineIdx = wordToInt line
 
 -------------------------------------------------------------------------------
 -- Unicode code points
