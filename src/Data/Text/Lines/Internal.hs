@@ -32,7 +32,7 @@ module Data.Text.Lines.Internal
   , intToWord
   ) where
 
-import Prelude ((+), (-), (*), (||), subtract, quot, fromIntegral, seq, error)
+import Prelude ((+), (-), (*), subtract, quot, fromIntegral, seq, error)
 import Control.DeepSeq (NFData, rnf)
 import Data.Bits (toIntegralSized)
 import Data.Bool (Bool, otherwise, not)
@@ -254,7 +254,7 @@ splitAtLine k = splitAtPosition (Position k 0)
 --
 getLine :: Word -> TextLines -> Text
 getLine line (TextLines t@(Text arr off len) nls)
-  | line < 0 || intToWord (U.length nls) < line = mempty
+  | intToWord (U.length nls) < line = mempty
   | otherwise =
     let lineIdx = wordToInt line
     in case (nls U.!? (lineIdx - 1), nls U.!? lineIdx) of
