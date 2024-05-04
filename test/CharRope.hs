@@ -7,13 +7,15 @@ module CharRope
   ( testSuite
   ) where
 
-import Prelude ()
+import Prelude ((+), (-))
 import Data.Function (($))
 import Data.Semigroup ((<>))
+import Data.Monoid (mempty)
+import qualified Data.List as L
 import qualified Data.Text.Lines as Lines
 import qualified Data.Text.Rope as Rope
 import Test.Tasty (testGroup, TestTree)
-import Test.Tasty.QuickCheck (testProperty, (===), (.&&.))
+import Test.Tasty.QuickCheck (Positive(..), conjoin, testProperty, (===), (.&&.))
 
 import Utils ()
 
@@ -48,4 +50,13 @@ testSuite = testGroup "Char Rope"
   , testProperty "splitAtPosition 2" $
     \i x -> case (Rope.splitAtPosition i x, Lines.splitAtPosition i (Lines.fromText $ Rope.toText x)) of
       ((y, z), (y', z')) -> Lines.fromText (Rope.toText y) === y' .&&. Lines.fromText (Rope.toText z) === z'
+
+  , testProperty "forall i in bounds: getLine i x == lines x !! i" $
+    \x -> let lns = Rope.lines x in
+      conjoin $ L.zipWith (\idx ln -> Rope.getLine idx x === ln) [0..] lns
+  , testProperty "forall i out of bounds: getLine i x == mempty" $
+    \x (Positive offset) ->
+      let maxIdx = L.genericLength (Rope.lines x) - 1
+          outOfBoundsIdx = maxIdx + offset
+      in Rope.getLine outOfBoundsIdx x === mempty
   ]

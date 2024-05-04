@@ -11,13 +11,15 @@ import Prelude ((+), (-))
 import Data.Bool (Bool(..), (&&))
 import Data.Function (($))
 import Data.Maybe (Maybe(..), isJust)
+import Data.Monoid (mempty)
 import Data.Semigroup ((<>))
+import qualified Data.List as L
 import qualified Data.Text.Lines as Char
 import qualified Data.Text.Utf8.Lines as Utf8
 import qualified Data.Text.Utf16.Lines as Utf16
 import qualified Data.Text.Mixed.Rope as Mixed
 import Test.Tasty (testGroup, TestTree)
-import Test.Tasty.QuickCheck (testProperty, (===), property, (.&&.), counterexample)
+import Test.Tasty.QuickCheck (Positive(..), conjoin, counterexample, property, testProperty, (===), (.&&.))
 
 import Utils ()
 
@@ -106,4 +108,13 @@ testSuite = testGroup "Utf16 Mixed"
     \i x -> case Mixed.utf16SplitAtPosition i x of
       Just{} -> True
       Nothing -> isJust (Mixed.utf16SplitAtPosition (i <> Utf16.Position 0 1) x)
+
+  , testProperty "forall i in bounds: getLine i x == lines x !! i" $
+    \x -> let lns = Mixed.lines x in
+      conjoin $ L.zipWith (\idx ln -> Mixed.getLine idx x === ln) [0..] lns
+  , testProperty "forall i out of bounds: getLine i x == mempty" $
+    \x (Positive offset) ->
+      let maxIdx = L.genericLength (Mixed.lines x) - 1
+          outOfBoundsIdx = maxIdx + offset
+      in Mixed.getLine outOfBoundsIdx x === mempty
   ]

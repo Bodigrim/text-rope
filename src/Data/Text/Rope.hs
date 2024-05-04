@@ -28,6 +28,7 @@ module Data.Text.Rope
   , lines
   , lengthInLines
   , splitAtLine
+  , getLine
   -- * Code points
   , length
   , splitAt
@@ -388,3 +389,21 @@ splitAtPosition (Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
   where
     (beforeLine, afterLine) = splitAtLine l rp
     (beforeColumn, afterColumn) = splitAt c afterLine
+
+-- | Get a line by its 0-based index.
+-- Returns "" if the index is out of bounds.
+-- The result doesn't contain newline characters.
+--
+-- >>> :set -XOverloadedStrings
+-- >>> map (\l -> getLine l "foo\nbar\n😊😊\n\n") [0..3]
+-- ["foo","bar","😊😊",""]
+--
+getLine :: Word -> Rope -> Text
+getLine lineIdx rp =
+  case T.unsnoc firstLine of
+    Just (firstLineInit, '\n') -> firstLineInit
+    _ -> firstLine
+  where
+    (_, afterIndex) = splitAtLine lineIdx rp
+    (firstLineRope, _ ) = splitAtLine 1 afterIndex
+    firstLine = toText firstLineRope

@@ -244,9 +244,9 @@ lines (TextLines (Text arr off len) nls) = go off (U.toList nls)
 splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine k = splitAtPosition (Position k 0)
 
--- | Get line with given index, O(1).
+-- | Get line with given 0-based index, O(1).
 -- The resulting Text does not contain newlines.
--- Returns "" if the line index is out of bounds
+-- Returns "" if the line index is out of bounds.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> map (\l -> getLine l "fя𐀀\n☺bar\n\n") [0..3]
