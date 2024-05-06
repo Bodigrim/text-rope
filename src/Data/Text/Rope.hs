@@ -391,8 +391,8 @@ splitAtPosition (Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
     (beforeColumn, afterColumn) = splitAt c afterLine
 
 -- | Get a line by its 0-based index.
--- Returns "" if the index is out of bounds.
--- The result doesn't contain newline characters.
+-- Returns @""@ if the index is out of bounds.
+-- The result doesn't contain @\\n@ characters.
 --
 -- >>> :set -XOverloadedStrings
 -- >>> map (\l -> getLine l "foo\nbar\n😊😊\n\n") [0..3]

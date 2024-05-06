@@ -245,7 +245,7 @@ splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine k = splitAtPosition (Position k 0)
 
 -- | Get line with given 0-based index, O(1).
--- The resulting Text does not contain newlines.
+-- The resulting Text does not contain @\\n@ characters..
 -- Returns "" if the line index is out of bounds.
 --
 -- >>> :set -XOverloadedStrings
