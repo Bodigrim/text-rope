@@ -259,7 +259,7 @@ getLine line (TextLines t@(Text arr off len) nls)
     let lineIdx = wordToInt line
     in case (nls U.!? (lineIdx - 1), nls U.!? lineIdx) of
       (Nothing, Nothing) -> t
-      (Nothing, Just endNl) -> Text arr off (endNl - off)
+      (Nothing, Just endNl) -> Text arr off (endNl - off) -- branch triggered by `getLine 0 "a\n"`
       (Just startNl, Nothing) -> Text arr (startNl + 1) (len + off - startNl - 1)
       (Just startNl, Just endNl) -> Text arr (startNl + 1) (endNl - startNl - 1)
 
