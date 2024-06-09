@@ -1,3 +1,7 @@
+-- |
+-- Licence:     BSD3
+-- Maintainer:  Andrew Lelechenko <andrew.lelechenko@gmail.com>
+
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
