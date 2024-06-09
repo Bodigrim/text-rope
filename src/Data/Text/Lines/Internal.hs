@@ -252,6 +252,7 @@ splitAtLine k = splitAtPosition (Position k 0)
 -- >>> map (\l -> getLine l "fя𐀀\n☺bar\n\n") [0..3]
 -- ["fя𐀀","☺bar","",""]
 --
+-- @since 0.3
 getLine :: Word -> TextLines -> Text
 getLine line (TextLines t@(Text arr off len) nls)
   | intToWord (U.length nls) < line = mempty

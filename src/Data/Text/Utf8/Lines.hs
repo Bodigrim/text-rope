@@ -1,6 +1,8 @@
 -- |
 -- Licence:     BSD3
 -- Maintainer:  Andrew Lelechenko <andrew.lelechenko@gmail.com>
+--
+-- @since 0.3
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}

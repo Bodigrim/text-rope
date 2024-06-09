@@ -2,6 +2,8 @@
 -- Copyright:   (c) 2021-2022 Andrew Lelechenko
 -- Licence:     BSD3
 -- Maintainer:  Andrew Lelechenko <andrew.lelechenko@gmail.com>
+--
+-- @since 0.2
 
 module Data.Text.Utf16.Rope.Mixed
   ( Mixed.Rope

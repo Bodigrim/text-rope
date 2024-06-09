@@ -401,6 +401,7 @@ splitAtPosition (Position l c) rp = do
 -- >>> map (\l -> getLine l "foo\nbar\n😊😊\n\n") [0..3]
 -- ["foo","bar","😊😊",""]
 --
+-- @since 0.3
 getLine :: Word -> Rope -> Text
 getLine lineIdx rp =
   case T.unsnoc firstLine of
