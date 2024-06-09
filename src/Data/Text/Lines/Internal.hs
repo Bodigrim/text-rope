@@ -13,6 +13,7 @@ module Data.Text.Lines.Internal
   , fromText
   , null
   -- * Lines
+  , getLine
   , lines
   , lengthInLines
   , newlines
@@ -242,6 +243,25 @@ lines (TextLines (Text arr off len) nls) = go off (U.toList nls)
 --
 splitAtLine :: HasCallStack => Word -> TextLines -> (TextLines, TextLines)
 splitAtLine k = splitAtPosition (Position k 0)
+
+-- | Get line with given 0-based index, O(1).
+-- The resulting Text does not contain @\\n@ characters..
+-- Returns "" if the line index is out of bounds.
+--
+-- >>> :set -XOverloadedStrings
+-- >>> map (\l -> getLine l "fя𐀀\n☺bar\n\n") [0..3]
+-- ["fя𐀀","☺bar","",""]
+--
+getLine :: Word -> TextLines -> Text
+getLine line (TextLines t@(Text arr off len) nls)
+  | intToWord (U.length nls) < line = mempty
+  | otherwise =
+    let lineIdx = wordToInt line
+    in case (nls U.!? (lineIdx - 1), nls U.!? lineIdx) of
+      (Nothing, Nothing) -> t
+      (Nothing, Just endNl) -> Text arr off (endNl - off) -- branch triggered by `getLine 0 "a\n"`
+      (Just startNl, Nothing) -> Text arr (startNl + 1) (len + off - startNl - 1)
+      (Just startNl, Just endNl) -> Text arr (startNl + 1) (endNl - startNl - 1)
 
 -------------------------------------------------------------------------------
 -- Unicode code points

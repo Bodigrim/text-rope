@@ -28,6 +28,7 @@ module Data.Text.Mixed.Rope
   , lines
   , lengthInLines
   , splitAtLine
+  , getLine
   -- * Code points
   , charLength
   , charSplitAt
@@ -562,3 +563,21 @@ utf16SplitAtPosition (Utf16.Position l c) rp = do
   let (beforeLine, afterLine) = splitAtLine l rp
   (beforeColumn, afterColumn) <- utf16SplitAt c afterLine
   Just (beforeLine <> beforeColumn, afterColumn)
+
+-- | Get a line by its 0-based index.
+-- Returns @""@ if the index is out of bounds.
+-- The result doesn't contain @\\n@ characters.
+--
+-- >>> :set -XOverloadedStrings
+-- >>> map (\l -> getLine l "foo\nbar\n😊😊\n\n") [0..3]
+-- ["foo","bar","😊😊",""]
+--
+getLine :: Word -> Rope -> Text
+getLine lineIdx rp =
+  case T.unsnoc firstLine of
+    Just (firstLineInit, '\n') -> firstLineInit
+    _ -> firstLine
+  where
+    (_, afterIndex) = splitAtLine lineIdx rp
+    (firstLineRope, _ ) = splitAtLine 1 afterIndex
+    firstLine = toText firstLineRope
