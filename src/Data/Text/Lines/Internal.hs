@@ -253,17 +253,17 @@ splitAtLine k = splitAtPosition (Position k 0)
 -- ["fя𐀀","☺bar","",""]
 --
 -- @since 0.3
-getLine :: Word -> TextLines -> Text
+getLine :: Word -> TextLines -> TextLines
 getLine line (TextLines t@(Text arr off len) nls)
   | intToWord (U.length nls) < line = mempty
   | otherwise =
     let lineIdx = wordToInt line
-    in case (nls U.!? (lineIdx - 1), nls U.!? lineIdx) of
-      (Nothing, Nothing) -> t
-      (Nothing, Just endNl) -> Text arr off (endNl - off) -- branch triggered by `getLine 0 "a\n"`
-      (Just startNl, Nothing) -> Text arr (startNl + 1) (len + off - startNl - 1)
-      (Just startNl, Just endNl) -> Text arr (startNl + 1) (endNl - startNl - 1)
-
+        tNew = case (nls U.!? (lineIdx - 1), nls U.!? lineIdx) of
+          (Nothing, Nothing) -> t
+          (Nothing, Just endNl) -> Text arr off (endNl - off) -- branch triggered by `getLine 0 "a\n"`
+          (Just startNl, Nothing) -> Text arr (startNl + 1) (len + off - startNl - 1)
+          (Just startNl, Just endNl) -> Text arr (startNl + 1) (endNl - startNl - 1)
+    in TextLines tNew mempty
 -------------------------------------------------------------------------------
 -- Unicode code points
 
