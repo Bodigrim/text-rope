@@ -111,7 +111,7 @@ testSuite = testGroup "Utf16 Mixed"
 
   , testProperty "forall i in bounds: getLine i x == lines x !! i" $
     \x -> let lns = Mixed.lines x in
-      conjoin $ L.zipWith (\idx ln -> Mixed.getLine idx x === ln) [0..] lns
+      conjoin $ L.zipWith (\idx ln -> Mixed.getLine idx x === Mixed.fromText ln) [0..] lns
   , testProperty "forall i out of bounds: getLine i x == mempty" $
     \x (Positive offset) ->
       let maxIdx = L.genericLength (Mixed.lines x) - 1

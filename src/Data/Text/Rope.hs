@@ -391,7 +391,7 @@ splitAtPosition (Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
     (beforeColumn, afterColumn) = splitAt c afterLine
 
 -- | Get a line by its 0-based index.
--- Returns @""@ if the index is out of bounds.
+-- Returns 'mempty' if the index is out of bounds.
 -- The result doesn't contain @\\n@ characters.
 --
 -- >>> :set -XOverloadedStrings
@@ -399,12 +399,15 @@ splitAtPosition (Position l c) rp = (beforeLine <> beforeColumn, afterColumn)
 -- ["foo","bar","😊😊",""]
 --
 -- @since 0.3
-getLine :: Word -> Rope -> Text
+getLine :: Word -> Rope -> Rope
 getLine lineIdx rp =
-  case T.unsnoc firstLine of
-    Just (firstLineInit, '\n') -> firstLineInit
+  case splitAt (length firstLine - 1) firstLine of
+    (firstLineInit, firstLineLast)
+      | isNewline firstLineLast -> firstLineInit
     _ -> firstLine
   where
     (_, afterIndex) = splitAtLine lineIdx rp
-    (firstLineRope, _ ) = splitAtLine 1 afterIndex
-    firstLine = toText firstLineRope
+    (firstLine, _ ) = splitAtLine 1 afterIndex
+
+isNewline :: Rope -> Bool
+isNewline = (== T.singleton '\n') . toText

@@ -105,7 +105,7 @@ testSuite = testGroup "Char Lines"
 
   , testProperty "forall i in bounds: getLine i x == lines x !! i" $
     \x -> let lns = lines x in
-      conjoin $ zipWith (\idx ln -> getLine idx x === ln) [0..] lns
+      conjoin $ zipWith (\idx ln -> getLine idx x === fromText ln) [0..] lns
   , testProperty "forall i out of bounds: getLine i x == mempty" $
     \x (Positive offset) ->
       let maxIdx = L.genericLength (lines x) - 1
