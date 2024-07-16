@@ -403,12 +403,15 @@ splitAtPosition (Position l c) rp = do
 -- ["foo","bar","😊😊",""]
 --
 -- @since 0.3
-getLine :: Word -> Rope -> Text
+getLine :: Word -> Rope -> Rope
 getLine lineIdx rp =
-  case T.unsnoc firstLine of
-    Just (firstLineInit, '\n') -> firstLineInit
+  case splitAt (length firstLine - 1) firstLine of
+    Just (firstLineInit, firstLineLast)
+      | isNewline firstLineLast -> firstLineInit
     _ -> firstLine
   where
     (_, afterIndex) = splitAtLine lineIdx rp
-    (firstLineRope, _ ) = splitAtLine 1 afterIndex
-    firstLine = toText firstLineRope
+    (firstLine, _ ) = splitAtLine 1 afterIndex
+
+isNewline :: Rope -> Bool
+isNewline = (== T.singleton '\n') . toText

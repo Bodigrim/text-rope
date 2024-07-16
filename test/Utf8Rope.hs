@@ -58,7 +58,7 @@ testSuite = testGroup "Utf8 Rope"
 
   , testProperty "forall i in bounds: getLine i x == lines x !! i" $
     \x -> let lns = Rope.lines x in
-      conjoin $ L.zipWith (\idx ln -> Rope.getLine idx x === ln) [0..] lns
+      conjoin $ L.zipWith (\idx ln -> Rope.getLine idx x === Rope.fromText ln) [0..] lns
   , testProperty "forall i out of bounds: getLine i x == mempty" $
     \x (Positive offset) ->
       let maxIdx = L.genericLength (Rope.lines x) - 1
