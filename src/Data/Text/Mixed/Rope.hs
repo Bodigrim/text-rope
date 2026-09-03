@@ -171,7 +171,7 @@ charLength = _metricsCharLen . metrics
 --
 -- >>> :set -XOverloadedStrings
 -- >>> utf8Length "fя𐀀"
--- 4
+-- 7
 --
 utf8Length :: Rope -> Word
 utf8Length = _metricsUtf8Len . metrics
