@@ -19,11 +19,11 @@ data-files:
   bench/bench.txt
   bench/bench-utf8.txt
 
-tested-with: GHC == 9.10.1, GHC == 9.8.2, GHC == 9.6.5, GHC == 9.4.8, GHC == 9.2.8, GHC==9.0.2, GHC==8.10.7, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2, GHC==8.0.2
+tested-with: GHC == 9.14.1, GHC == 9.12.2, GHC == 9.10.3, GHC == 9.8.4, GHC == 9.6.7, GHC == 9.4.8, GHC == 9.2.8, GHC==9.0.2, GHC==8.10.7, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2, GHC==8.0.2
 
 source-repository head
   type: git
-  location: git://github.com/Bodigrim/text-rope.git
+  location: https://github.com/Bodigrim/text-rope
 
 flag debug
   default: False
@@ -93,7 +93,6 @@ benchmark text-rope-bench
     random,
     -- yi-rope,
     -- rope-utf16-splay,
-    tasty >= 1.2,
-    tasty-bench >= 0.3,
+    tasty-bench >= 0.5,
     text
   default-language: Haskell2010
